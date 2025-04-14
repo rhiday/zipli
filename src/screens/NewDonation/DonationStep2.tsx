@@ -362,8 +362,8 @@ export const DonationStep2 = (): JSX.Element => {
                 </div>
               ) : (
                 // Display mode
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-[#f2d4d8] rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="flex flex-col items-start sm:flex-row sm:items-center sm:gap-3">
+                  <div className="w-12 h-12 bg-[#f2d4d8] rounded-lg flex items-center justify-center flex-shrink-0 mb-2 sm:mb-0">
                     {item.image?.dataUrl ? (
                       <div className="relative w-full h-full">
                         <img 
@@ -393,7 +393,7 @@ export const DonationStep2 = (): JSX.Element => {
                       </button>
                     )}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <h3 className="font-medium">{item.title}, {item.quantity}</h3>
                     <p className="text-sm text-gray-600">{item.allergens.join(', ')}</p>
                   </div>

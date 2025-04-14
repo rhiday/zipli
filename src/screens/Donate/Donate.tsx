@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Separator } from "../../components/ui/separator";
@@ -6,9 +6,12 @@ import { useNavigate } from "react-router-dom";
 import { Layout } from "../../components/Layout";
 import { BottomNav } from "../../components/BottomNav";
 import { UserAvatar } from "../../components/UserAvatar";
-import { Trash2, CheckCircle2 } from "lucide-react";
+import { Trash2, CheckCircle2, ChevronDown, Info } from "lucide-react";
 import { getDonations, deleteDonation as deleteDonationFromDb } from "../../lib/donations";
+import { supabase } from "../../lib/supabase"; // Ensure supabase client is imported
 import type { Database } from '../../types/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js'; // Import RealtimeChannel type
+import jsPDF from 'jspdf';
 
 type Donation = Database['public']['Tables']['donations']['Row'];
 
@@ -16,18 +19,46 @@ export const Donate = (): JSX.Element => {
   const navigate = useNavigate();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMonthYear, setSelectedMonthYear] = useState("February 2025");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null); // Ref to hold the channel
+
+  const availableMonths = [
+    "February 2025",
+    "January 2025",
+    "December 2024",
+    "November 2024",
+  ];
 
   const activeDonations = donations.filter(d => d.status === 'active');
   const completedDonations = donations.filter(d => d.status === 'completed');
 
-  const loadDonations = async () => {
-    try {
-      const { donations: fetchedDonations, error } = await getDonations();
-      if (error) throw new Error(error);
-      setDonations(fetchedDonations);
-    } catch (error) {
-      console.error('Error loading donations:', error);
-      setError('Failed to load donations');
+  const fetchDonations = async () => {
+    // Fetch user ID if not already fetched
+    let currentUserId = userId;
+    if (!currentUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        currentUserId = user.id;
+      } else {
+        setError('User not authenticated');
+        return; // Can't load donations without user ID
+      }
+    }
+    
+    // Proceed to fetch donations using the currentUserId
+    if (currentUserId) {
+        try {
+            const { donations: fetchedDonations, error: fetchError } = await getDonations(); // Assumes getDonations uses the logged-in user context correctly
+            if (fetchError) throw new Error(fetchError);
+            setDonations(fetchedDonations);
+        } catch (err) {
+            console.error('Error loading donations:', err);
+            setError('Failed to load donations');
+        }
     }
   };
 
@@ -35,7 +66,9 @@ export const Donate = (): JSX.Element => {
     try {
       const { error } = await deleteDonationFromDb(id);
       if (error) throw new Error(error);
-      await loadDonations(); // Reload donations after deletion
+      // No need to call fetchDonations here if delete also triggers realtime (or handle delete event)
+      // For simplicity, let's remove the deleted item directly from state or rely on a DELETE subscription later
+      setDonations(currentDonations => currentDonations.filter(d => d.id !== id));
     } catch (error) {
       console.error('Error deleting donation:', error);
       setError('Failed to delete donation');
@@ -43,13 +76,113 @@ export const Donate = (): JSX.Element => {
   };
 
   useEffect(() => {
-    loadDonations();
-    const interval = setInterval(loadDonations, 60000);
+    // Get user ID first
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserId(user.id);
+        // Initial fetch
+        fetchDonations();
 
+        // --- Setup Realtime Subscription --- 
+        // Ensure only one channel is created
+        if (!channelRef.current) {
+            channelRef.current = supabase
+            .channel('public:donations') // Use a specific channel name
+            .on(
+                'postgres_changes',
+                {
+                event: 'INSERT', // Listen only for inserts
+                schema: 'public',
+                table: 'donations',
+                // We filter client-side because RLS handles row visibility
+                }, 
+                (payload) => {
+                    console.log('[DEBUG] Realtime INSERT received (any user):', payload); // Temporarily log all inserts
+                    // Check if the new donation belongs to the current user
+                    const newDonation = payload.new as Donation;
+                    // Temporarily commenting out the user ID check for debugging
+                    // if (newDonation.organization_id === user.id) { 
+                        console.log('[DEBUG] Reloading donations list due to any insert...');
+                        // Option 1: Refetch all donations (simple, ensures consistency)
+                        fetchDonations(); 
+                    // }
+                }
+            )
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('Successfully subscribed to donations channel!');
+                } 
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                     console.error('Donations channel subscription error:', status, err);
+                     setError('Connection issue: Could not sync donations in real-time.');
+                }
+            });
+        }
+      } else {
+        setError('User not authenticated for realtime updates.');
+      }
+    });
+
+    // --- Cleanup Function --- 
     return () => {
-      clearInterval(interval);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+          .then(() => console.log('Unsubscribed from donations channel.'))
+          .catch(err => console.error('Error unsubscribing from donations channel:', err));
+        channelRef.current = null; // Clear the ref
+      }
     };
-  }, []);
+  }, []); // Run only on mount
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownRef]);
+
+  const handleMonthSelect = (monthYear: string) => {
+    setSelectedMonthYear(monthYear);
+    setIsDropdownOpen(false);
+    // TODO: Add logic to fetch/update data for the selected month
+  };
+
+  // Function to handle PDF generation and download
+  const handleSharePdf = () => {
+    const doc = new jsPDF();
+    
+    // Get current impact data (using placeholders for now)
+    const totalFoodOffered = "46kg";
+    const portionsOffered = "131";
+    const costSaved = "125€";
+    const emissionReduction = "89%";
+    const selectedMonth = selectedMonthYear; // Use the state variable
+
+    // Set document properties (optional)
+    doc.setProperties({
+      title: `Impact Report - ${selectedMonth}`,
+    });
+
+    // Add content to the PDF
+    doc.setFontSize(18);
+    doc.text(`Impact Report - ${selectedMonth}`, 14, 22);
+    
+    doc.setFontSize(12);
+    doc.text(`Total Food Offered: ${totalFoodOffered}`, 14, 40);
+    doc.text(`Portions Offered: ${portionsOffered} (approx. 350g/portion)`, 14, 50);
+    doc.text(`Saved Food Disposal Costs: ${costSaved}`, 14, 60);
+    doc.text(`Emission Reduction: ${emissionReduction}`, 14, 70);
+
+    // TODO: Add more details, styling, or charts as needed
+
+    // Trigger download
+    doc.save(`zipli-impact-report-${selectedMonth.replace(" ", "-")}.pdf`);
+  };
 
   return (
     <Layout>
@@ -108,6 +241,87 @@ export const Donate = (): JSX.Element => {
           )}
         </section>
 
+        {/* Moved New Donation Button */}
+        <div className="flex mb-6">
+           <Button 
+              onClick={() => navigate('/new-donation')}
+              className="h-10 px-4 bg-[#085f33] text-white rounded-full hover:bg-[#064726] transition-colors shadow-sm w-full"
+            >
+              Make a new donation
+            </Button>
+        </div>
+
+        {/* Your Impact Section */}
+        <section className="my-8 p-4 bg-[#fff0f2] rounded-lg">
+          <div className="flex justify-between items-center mb-4 relative" ref={dropdownRef}>
+            <h2 className="text-base font-medium">Your impact</h2>
+            <Button 
+              variant="outline" 
+              className="h-8 px-3 text-sm border-[#085f33] text-[#085f33] rounded-full flex items-center gap-1 bg-transparent hover:bg-green-50/50"
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            >
+              {selectedMonthYear}
+              <ChevronDown size={16} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            </Button>
+            {isDropdownOpen && (
+              <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                <ul className="py-1">
+                  {availableMonths.map((month) => (
+                    <li key={month}>
+                      <button 
+                        className="w-full text-left px-3 py-1 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => handleMonthSelect(month)}
+                      >
+                        {month}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div className="mb-4">
+            <span className="text-4xl font-bold text-[#085f33]">46kg</span>
+            <span className="ml-2 text-sm text-gray-600">Total food offered</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <Card className="bg-white p-3 text-center rounded-lg shadow-sm">
+              <div className="text-xl font-semibold text-[#085f33]">131</div>
+              <div className="text-xs text-gray-500">portions offered</div>
+              <div className="text-xs text-gray-400">(350g/portion)</div>
+            </Card>
+            <Card className="bg-white p-3 text-center rounded-lg shadow-sm">
+              <div className="text-xl font-semibold text-[#085f33]">125€</div>
+              <div className="text-xs text-gray-500">Saved - Food</div>
+              <div className="text-xs text-gray-500">disposal costs</div>
+            </Card>
+            <Card className="bg-white p-3 text-center rounded-lg shadow-sm relative">
+              <div className="text-xl font-semibold text-[#085f33]">89%</div>
+              <div className="text-xs text-gray-500">Emission</div>
+              <div className="text-xs text-gray-500">reduction</div>
+              <button className="absolute top-1 right-1 text-gray-400 hover:text-gray-600">
+                <Info size={16} />
+              </button>
+            </Card>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-1">Export data for impact reporting</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Share detailed financial, social and environmental impact data for reporting, communications and operation planning:
+            </p>
+            <Button 
+              variant="outline" 
+              className="h-9 px-4 text-sm border-[#085f33] text-[#085f33] rounded-full bg-transparent hover:bg-green-50/50"
+              onClick={handleSharePdf}
+            >
+              Export as PDF
+            </Button>
+          </div>
+        </section>
+
         <Separator className="my-6" />
 
         <section className="mb-32">
@@ -115,12 +329,6 @@ export const Donate = (): JSX.Element => {
             <h2 className="text-base font-medium text-gray-600">
               Past donations
             </h2>
-            <Button 
-              onClick={() => navigate('/new-donation')}
-              className="h-10 px-4 bg-[#085f33] text-white rounded-full hover:bg-[#064726] transition-colors shadow-sm"
-            >
-              New Donation
-            </Button>
           </div>
           <div className="grid gap-4">
             {completedDonations.length > 0 ? (
