@@ -15,6 +15,14 @@ export const APP_CONFIG = {
       ACTIVE: 'active',
       COMPLETED: 'completed'
     }
+  },
+  STORAGE: {
+    BUCKETS: {
+      AVATARS: 'avatars'
+    },
+    FOLDERS: {
+      PROFILES: 'profiles'
+    }
   }
 } as const;
 

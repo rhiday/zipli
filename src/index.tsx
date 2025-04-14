@@ -23,6 +23,7 @@ import { UpdatePassword } from "./screens/Auth/UpdatePassword";
 import { EmailVerification } from "./screens/Auth/EmailVerification";
 import { useAuth } from "./components/AuthProvider";
 import { NotFound } from "./screens/NotFound";
+import { UserProfile } from "./screens/Profile/UserProfile";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -103,6 +104,11 @@ createRoot(document.getElementById("app") as HTMLElement).render(
           <Route path="/new-donation" element={
             <ProtectedRoute>
               <NewDonation />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <UserProfile />
             </ProtectedRoute>
           } />
           

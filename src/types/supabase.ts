@@ -18,6 +18,9 @@ export interface Database {
           address: string
           created_at: string
           updated_at: string
+          contact_person: string
+          role: string
+          profile_image?: string | null
         }
         Insert: {
           id: string
@@ -27,6 +30,9 @@ export interface Database {
           address: string
           created_at?: string
           updated_at?: string
+          contact_person?: string
+          role?: string
+          profile_image?: string | null
         }
         Update: {
           id?: string
@@ -36,6 +42,9 @@ export interface Database {
           address?: string
           created_at?: string
           updated_at?: string
+          contact_person?: string
+          role?: string
+          profile_image?: string | null
         }
       }
       donations: {

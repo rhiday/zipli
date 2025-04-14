@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "../../components/Layout";
 import { Mic, Plus, Minus, X, Pencil, Trash2 } from 'lucide-react';
 
@@ -20,22 +20,44 @@ type FoodItem = {
 
 export const NewDonation = (): JSX.Element => {
   const navigate = useNavigate();
-  const [items, setItems] = useState<FoodItem[]>([
-    {
-      id: 1,
-      title: '',
-      quantity: '500',
-      unit: 'g',
-      allergens: {
-        VL: false,
-        Veg: false,
-        G: false
-      }
-    }
-  ]);
+  const location = useLocation();
+  const savedItems = location.state?.items || [];
+  
+  // If we have saved items from step 2, use them, otherwise use default
+  const [items, setItems] = useState<FoodItem[]>(
+    savedItems.length > 0 
+      ? savedItems.map((item: any, index: number) => ({
+          id: index + 1,
+          title: item.title || '',
+          quantity: item.quantity?.replace(/[^0-9]/g, '') || '500',
+          unit: item.quantity?.includes('Kg') ? 'Kg' : 'g',
+          allergens: {
+            VL: item.allergens?.includes('VL') || false,
+            Veg: item.allergens?.includes('Veg') || false,
+            G: item.allergens?.includes('G') || false
+          }
+        }))
+      : [
+          {
+            id: 1,
+            title: '',
+            quantity: '500',
+            unit: 'g',
+            allergens: {
+              VL: false,
+              Veg: false,
+              G: false
+            }
+          }
+        ]
+  );
   const [error, setError] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [savedItemIds, setSavedItemIds] = useState<number[]>([]);
+  const [savedItemIds, setSavedItemIds] = useState<number[]>(
+    savedItems.length > 0 
+      ? savedItems.map((_: any, index: number) => index + 1) // Mark all items from step 2 as saved
+      : []
+  );
   
   useEffect(() => {
     // Clear any errors when component mounts
@@ -267,7 +289,6 @@ export const NewDonation = (): JSX.Element => {
           <div className="h-1 bg-[#085f33] flex-1 rounded-full"></div>
           <div className="h-1 bg-[#e2e8f0] flex-1 rounded-full"></div>
           <div className="h-1 bg-[#e2e8f0] flex-1 rounded-full"></div>
-          <div className="h-1 bg-[#e2e8f0] flex-1 rounded-full"></div>
         </div>
 
         <div className="mb-8">
@@ -453,7 +474,13 @@ export const NewDonation = (): JSX.Element => {
         {error && <p className="text-red-500 mb-4">{error}</p>}
 
         <div className="flex justify-end">
-          <Button onClick={handleContinue}>Continue</Button>
+          <Button 
+            onClick={handleContinue}
+            className="w-full h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
+            disabled={!items.some(item => isItemValid(item) && savedItemIds.includes(item.id))}
+          >
+            Review and Continue
+          </Button>
         </div>
       </div>
     </Layout>

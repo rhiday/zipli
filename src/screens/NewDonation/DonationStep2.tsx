@@ -40,28 +40,11 @@ export const DonationStep2 = (): JSX.Element => {
   const cameraInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Handle editing state
-  const startEditing = (index: number) => {
-    // If we're already editing an item, save it first
-    if (editingItemIndex !== null && editingItemIndex !== index) {
-      const item = foodItems[editingItemIndex];
-      
-      // Skip validation here as we'll handle it in cancelEditing
-      // Just make sure to add unit if needed
-      if (!item.quantity.includes('g') && !item.quantity.includes('Kg')) {
-        const quantity = parseInt(item.quantity.replace(/\D/g, ''));
-        if (!isNaN(quantity) && quantity > 0) {
-          setFoodItems(prev => {
-            const updated = [...prev];
-            updated[editingItemIndex].quantity = `${quantity}g`;
-            return updated;
-          });
-        }
-      }
-    }
-    
-    setEditingItemIndex(index);
-    setError(null);
-  };
+  // Comment out the startEditing function since we no longer need it for this page
+  // Users can only edit by going back to the previous step
+  // const startEditing = (index: number) => {
+  //   setEditingItemIndex(index);
+  // };
 
   const cancelEditing = () => {
     if (editingItemIndex !== null) {
@@ -186,36 +169,10 @@ export const DonationStep2 = (): JSX.Element => {
   };
 
   const handleContinue = () => {
-    // If we're editing an item, validate and save it first
-    if (editingItemIndex !== null) {
-      const item = foodItems[editingItemIndex];
-      
-      // Validation
-      if (!item.title.trim()) {
-        setError('Food item name is required');
-        return;
-      }
-      
-      const quantity = parseInt(item.quantity.replace(/\D/g, ''));
-      if (isNaN(quantity) || quantity <= 0) {
-        setError('Please enter a valid quantity');
-        return;
-      }
-      
-      // Make sure the unit is part of the quantity string
-      if (!item.quantity.includes('g') && !item.quantity.includes('Kg')) {
-        setFoodItems(prev => {
-          const updated = [...prev];
-          updated[editingItemIndex].quantity = `${quantity}g`;
-          return updated;
-        });
-      }
-      
-      // Exit edit mode
-      setEditingItemIndex(null);
-      setError(null);
-    }
+    // Ensure we're not in edit mode
+    setEditingItemIndex(null);
     
+    // Navigate directly to the pickup time selection (step3, which was step4)
     navigate('/new-donation/step3', {
       state: {
         items: foodItems
@@ -231,13 +188,27 @@ export const DonationStep2 = (): JSX.Element => {
     cameraInputRefs.current = foodItems.map((_, i) => cameraInputRefs.current[i] || null);
   }
 
+  // Add a handleGoBack function to pass items back to step 1
+  const handleGoBack = () => {
+    navigate('/new-donation', {
+      state: {
+        items: foodItems.map(item => ({
+          title: item.title,
+          quantity: item.quantity,
+          allergens: item.allergens,
+          // Don't pass images back since step 1 doesn't handle them
+        }))
+      }
+    });
+  };
+
   return (
     <Layout>
       <div className="p-6">
         <header className="mb-6">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(-1)}
+              onClick={handleGoBack}
               className="text-2xl"
               aria-label="Go back"
             >
@@ -251,12 +222,11 @@ export const DonationStep2 = (): JSX.Element => {
           <div className="h-1 bg-[#085f33] flex-1 rounded-full"></div>
           <div className="h-1 bg-[#085f33] flex-1 rounded-full"></div>
           <div className="h-1 bg-[#e2e8f0] flex-1 rounded-full"></div>
-          <div className="h-1 bg-[#e2e8f0] flex-1 rounded-full"></div>
         </div>
 
         <div className="mb-8">
-          <h2 className="text-xl font-medium mb-2">Summary</h2>
-          <p className="text-gray-600 mb-6">Review your donation items and add photos</p>
+          <h2 className="text-xl font-medium mb-2">Review your donation</h2>
+          <p className="text-gray-600 mb-6">Add photos and check your donation details before proceeding</p>
 
           {foodItems.map((item, index) => (
             <Card 
@@ -427,13 +397,6 @@ export const DonationStep2 = (): JSX.Element => {
                     <h3 className="font-medium">{item.title}, {item.quantity}</h3>
                     <p className="text-sm text-gray-600">{item.allergens.join(', ')}</p>
                   </div>
-                  <button
-                    onClick={() => startEditing(index)}
-                    className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                    aria-label="Edit item"
-                  >
-                    <Pencil size={18} className="text-gray-600" />
-                  </button>
                 </div>
               )}
               <input
@@ -466,7 +429,7 @@ export const DonationStep2 = (): JSX.Element => {
             onClick={handleContinue}
             className="w-full h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
           >
-            Continue
+            Select Pickup Time
           </Button>
         </div>
       </div>
