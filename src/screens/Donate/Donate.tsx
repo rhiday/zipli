@@ -198,49 +198,6 @@ export const Donate = (): JSX.Element => {
           </div>
         )}
 
-        <section className="mb-8">
-          <h2 className="text-base font-medium mb-3">
-            Active Donations
-          </h2>
-          {activeDonations.length > 0 ? (
-            <div className="space-y-3">
-              {activeDonations.map((donation) => (
-                <Card key={donation.id} className="bg-[#fff0f2] border-none">
-                  <CardContent className="p-4">
-                    <div className="flex gap-3">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-gray-400 text-sm">No image</span>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-medium">{donation.title}</h3>
-                            <p className="text-sm text-gray-600 mt-1">{donation.quantity}</p>
-                            <p className="text-sm text-[#085f33] mt-1">{donation.pickup_time}</p>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteDonation(donation.id);
-                            }}
-                            className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-600">No active donations</p>
-          )}
-        </section>
-
         {/* Moved New Donation Button */}
         <div className="flex mb-6">
            <Button 
