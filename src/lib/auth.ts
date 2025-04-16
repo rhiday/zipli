@@ -73,6 +73,9 @@ export const signIn = async (email: string, password: string) => {
 
 export const signOut = async () => {
   try {
+    // Clear session preference
+    localStorage.removeItem('session-preference');
+    
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     return { error: null };

@@ -103,10 +103,10 @@ export const DonationStep2 = (): JSX.Element => {
           ))}
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-4">
           <Button 
             onClick={handleContinue}
-            className="w-full h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
+            className="px-12 h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
           >
             Select Pickup Time
           </Button>

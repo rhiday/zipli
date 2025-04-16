@@ -3,13 +3,9 @@ import { Button } from "../../components/ui/button";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "../../components/Layout";
 import { supabase } from '../../lib/supabase';
-import { useSupabaseClient } from "@supabase/auth-helpers-react";
-import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
-import { z } from "zod";
 
-export const SignIn = (): JSX.Element => {
-  const client = useSupabaseClient();
+export const Login = (): JSX.Element => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
@@ -42,24 +38,22 @@ export const SignIn = (): JSX.Element => {
       // Attempt log in
       const { data, error: loginError } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
-        password: form.password,
-        options: {
-          expiresIn: keepLoggedIn ? 30 * 24 * 60 * 60 : 24 * 60 * 60 // 30 days : 1 day
-        }
+        password: form.password
       });
 
       if (loginError) {
-        // Handle specific error cases
-        if (loginError.message.includes('Invalid login credentials')) {
-          throw new Error('Incorrect email or password. Please try again.');
-        } else if (loginError.message.includes('Email not confirmed')) {
-          throw new Error('Please verify your email before logging in. Check your inbox for the verification link.');
-        }
-        throw loginError;
+        setError(loginError.message);
+        setIsLoading(false);
+        return;
       }
 
-      if (!data.session) {
-        throw new Error('No session data returned');
+      // Store keepLoggedIn preference
+      if (!keepLoggedIn) {
+        // When not keeping logged in, we'll handle this with a shorter session
+        // Session length is configured at the Supabase project level
+        localStorage.setItem('session-preference', 'short-term');
+      } else {
+        localStorage.setItem('session-preference', 'long-term');
       }
 
       // Check if user has metadata from registration
@@ -235,19 +229,15 @@ export const SignIn = (): JSX.Element => {
           </div>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => navigate('/register')}
-                className="text-[#085f33] hover:underline"
-              >
-                Register here
-              </button>
-            </p>
+            <Link
+              to="/register"
+              className="text-sm text-gray-600 hover:text-[#085f33] hover:underline"
+            >
+              Don't have an account? Register here
+            </Link>
           </div>
         </form>
       </div>
     </Layout>
   );
-};
+}; 

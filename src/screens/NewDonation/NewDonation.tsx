@@ -651,10 +651,10 @@ export const NewDonation = (): JSX.Element => {
 
         {error && <p className="text-red-500 mb-4">{error}</p>}
 
-        <div className="flex justify-end">
+        <div className="flex justify-center">
           <Button 
             onClick={handleContinue}
-            className="w-full h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
+            className="px-12 h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
             disabled={!items.some(item => isItemValid(item) && savedItemIds.includes(item.id))}
           >
             Review and Continue

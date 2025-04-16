@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from "../../components/Layout";
 import { supabase } from '../../lib/supabase';
 import { Button } from "../../components/ui/button";
+import { Link } from 'react-router-dom';
 
 export const EmailVerification = (): JSX.Element => {
   const navigate = useNavigate();

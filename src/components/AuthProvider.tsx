@@ -23,6 +23,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // Check if short-term session and auto-logout after inactivity
+      const sessionPreference = localStorage.getItem('session-preference');
+      if (sessionPreference === 'short-term' && session) {
+        // Set up activity tracking for auto-logout after 1 hour of inactivity
+        let inactivityTimer: number;
+        
+        const resetInactivityTimer = () => {
+          clearTimeout(inactivityTimer);
+          inactivityTimer = window.setTimeout(() => {
+            // Auto logout after 1 hour of inactivity
+            supabase.auth.signOut().then(() => {
+              localStorage.removeItem('session-preference');
+              window.location.href = '/auth'; // Redirect to login
+            });
+          }, 60 * 60 * 1000); // 1 hour in milliseconds
+        };
+        
+        // Set initial timer
+        resetInactivityTimer();
+        
+        // Reset timer on user activity
+        const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart'];
+        activityEvents.forEach(event => {
+          window.addEventListener(event, resetInactivityTimer);
+        });
+        
+        // Clean up event listeners
+        return () => {
+          clearTimeout(inactivityTimer);
+          activityEvents.forEach(event => {
+            window.removeEventListener(event, resetInactivityTimer);
+          });
+        };
+      }
     });
 
     // Listen for auth changes

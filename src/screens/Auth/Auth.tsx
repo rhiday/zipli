@@ -16,20 +16,21 @@ export const Auth = (): JSX.Element => {
           </p>
         </div>
 
-        <div className="space-y-4">
-          <Button 
-            onClick={() => navigate('/register')}
-            className="w-full h-12 bg-[#085f33] hover:bg-[#064726] text-white rounded-full text-lg"
-          >
-            Register
-          </Button>
+        <div className="space-y-4 flex flex-col items-center">
           <Button 
             onClick={() => navigate('/signin')}
-            variant="outline"
-            className="w-full h-12 bg-white border-2 border-[#085f33] text-[#085f33] rounded-full text-lg hover:bg-[#085f33] hover:text-white"
+            className="px-12 h-12 bg-[#085f33] hover:bg-[#064726] text-white rounded-full text-lg"
           >
-            Sign in
+            Log in
           </Button>
+          <div className="text-center">
+            <button 
+              onClick={() => navigate('/register')}
+              className="text-[#085f33] hover:underline text-sm"
+            >
+              Don't have an account? Register here
+            </button>
+          </div>
         </div>
       </div>
     </Layout>

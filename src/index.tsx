@@ -15,7 +15,7 @@ import { DonationStep4 } from "./screens/NewDonation/DonationStep4";
 import { ThankYouPage } from "./screens/NewDonation/ThankYouPage";
 import { VoiceInput } from "./screens/NewDonation/VoiceInput";
 import { Auth } from "./screens/Auth/Auth";
-import { SignIn } from "./screens/Auth/SignIn";
+import { Login } from "./screens/Auth/Login";
 import { Register } from "./screens/Auth/Register";
 import { VerificationSuccess } from "./screens/Auth/VerificationSuccess";
 import { ResetPassword } from "./screens/Auth/ResetPassword";
@@ -47,7 +47,7 @@ createRoot(document.getElementById("app") as HTMLElement).render(
           <Routes>
           {/* Public Routes */}
           <Route path="/auth" element={<Auth />} />
-          <Route path="/signin" element={<SignIn />} />
+          <Route path="/signin" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/auth/verify/success" element={<VerificationSuccess />} />
           <Route path="/reset-password" element={<ResetPassword />} />
