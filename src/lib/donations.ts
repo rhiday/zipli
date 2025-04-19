@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { APP_CONFIG } from './constants';
 import type { Database } from '../types/supabase';
+import Logger from './logger';
 
 type Donation = Database['public']['Tables']['donations']['Row'];
 
@@ -8,70 +9,131 @@ type Donation = Database['public']['Tables']['donations']['Row'];
 let cachedDonations: Donation[] | null = null;
 let lastFetchTime = 0;
 
+// Track in-progress donation creations to prevent duplicates
+const pendingDonations = new Set<string>();
+
 export const createDonation = async (donation: Omit<Database['public']['Tables']['donations']['Insert'], 'id' | 'organization_id'>) => {
-  try {
-    console.log('Starting createDonation with data:', donation);
+  // Create a unique key for this donation
+  const donationKey = `${donation.title}_${donation.pickup_time}`;
+  
+  // Use Logger to prevent duplicates and track the entire operation
+  return Logger.preventDuplicates(
+    donationKey,
+    () => Logger.trackOperation('createDonation', async (txId) => {
+      try {
+        Logger.log('Processing donation data', { 
+          context: { donation }, 
+          transactionId: txId 
+        });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
 
-    console.log('User authenticated:', user.id);
+        Logger.log('User authenticated', { 
+          context: { userId: user.id },
+          transactionId: txId 
+        });
 
-    // Validate required fields
-    if (!donation.title || !donation.description || !donation.quantity || 
-        !donation.location || !donation.pickup_time) {
-      console.log('Missing required fields:', { donation });
-      throw new Error('Missing required fields');
-    }
+        // Validate required fields
+        if (!donation.title || !donation.description || !donation.quantity || 
+            !donation.location || !donation.pickup_time) {
+          Logger.log('Missing required fields', { 
+            level: 'error',
+            context: { donation },
+            transactionId: txId
+          });
+          throw new Error('Missing required fields');
+        }
 
-    // Insert the donation
-    console.log('Inserting donation for organization:', user.id);
-    const { data, error } = await supabase
-      .from('donations')
-      .insert({
-        ...donation,
-        organization_id: user.id,
-        status: 'active'
-      })
-      .select()
-      .single();
+        // Check if a similar donation already exists
+        const { data: existingDonations } = await supabase
+          .from('donations')
+          .select('*')
+          .eq('organization_id', user.id)
+          .eq('title', donation.title)
+          .eq('pickup_time', donation.pickup_time);
+          
+        if (existingDonations && existingDonations.length > 0) {
+          Logger.log('Similar donation already exists', {
+            context: { existingDonation: existingDonations[0] },
+            transactionId: txId
+          });
+          return { donation: existingDonations[0], error: null };
+        }
 
-    if (error) {
-      console.error('Database error:', error);
-      throw error;
-    }
+        // Insert the donation
+        Logger.log('Inserting donation', { 
+          context: { organizationId: user.id },
+          transactionId: txId 
+        });
+        
+        const { data, error } = await supabase
+          .from('donations')
+          .insert({
+            ...donation,
+            organization_id: user.id,
+            status: 'active'
+          })
+          .select()
+          .single();
 
-    console.log('Donation created successfully:', data);
-    return { donation: data, error: null };
-  } catch (error) {
-    console.error('Error in createDonation:', error);
-    return {
-      donation: null,
-      error: error instanceof Error ? error.message : 'Failed to create donation'
-    };
-  }
+        if (error) {
+          throw error;
+        }
+
+        Logger.log('Donation created successfully', { 
+          context: { donationId: data.id },
+          transactionId: txId 
+        });
+        
+        return { donation: data, error: null };
+      } catch (error) {
+        // Error is automatically logged by trackOperation
+        return {
+          donation: null,
+          error: error instanceof Error ? error.message : 'Failed to create donation'
+        };
+      }
+    }),
+    { operation: 'createDonation', donationDetails: { title: donation.title, pickup_time: donation.pickup_time } }
+  );
 };
 
 export const getDonations = async () => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+  return Logger.trackOperation('getDonations', async (txId) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
-      .from('donations')
-      .select('*')
-      .eq('organization_id', user.id)
-      .order('created_at', { ascending: false });
+      Logger.log('Fetching donations', { 
+        context: { userId: user.id },
+        transactionId: txId 
+      });
 
-    if (error) throw error;
-    return { donations: data || [], error: null };
-  } catch (error) {
-    console.error('Error fetching donations:', error);
-    return {
-      donations: [],
-      error: error instanceof Error ? error.message : 'Failed to fetch donations'
-    };
-  }
+      const { data, error } = await supabase
+        .from('donations')
+        .select('*')
+        .eq('organization_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      Logger.log('Donations fetched successfully', { 
+        context: { count: data?.length || 0 },
+        transactionId: txId 
+      });
+      
+      return { donations: data || [], error: null };
+    } catch (error) {
+      // Error is automatically logged by trackOperation
+      return {
+        donations: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch donations'
+      };
+    }
+  });
 };
 
 export const getAvailableDonations = async () => {
