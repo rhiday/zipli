@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Layout } from "../../components/Layout";
 import { BottomNav } from "../../components/BottomNav";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -6,45 +6,122 @@ import { UserAvatar } from "../../components/UserAvatar";
 import { DonationFilters } from "../../components/DonationFilters";
 import { sortDonations } from "../../lib/filters";
 import { getAvailableDonations } from "../../lib/donations";
-import type { Database } from '../../types/supabase';
-
-type Donation = Database['public']['Tables']['donations']['Row'];
+import { supabase } from "../../lib/supabase";
+import Logger from "../../lib/logger";
+import { SupabaseDonation, supabaseToDonationItem } from "../../types/donation";
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export const Receive = (): JSX.Element => {
+  const txId = Logger.generateTransactionId();
   const location = useLocation();
   const navigate = useNavigate();
-  const [donations, setDonations] = useState<Donation[]>([]);
+  const [donations, setDonations] = useState<SupabaseDonation[]>([]);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   // Only show active donations in the receive feed
   const activeDonations = donations.filter(d => d.status === 'active');
   const filteredDonations = sortDonations(activeDonations, selectedFilter);
 
   const loadDonations = async () => {
-    try {
-      const { donations: fetchedDonations, error } = await getAvailableDonations();
-      if (error) throw new Error(error);
-      setDonations(fetchedDonations);
-    } catch (error) {
-      console.error('Error loading donations:', error);
-      setError('Failed to load donations');
-    } finally {
-      setIsLoading(false);
-    }
+    return Logger.trackOperation('loadAvailableDonations', async (opTxId) => {
+      try {
+        Logger.log('Fetching available donations', {
+          transactionId: opTxId
+        });
+        
+        const { donations: fetchedDonations, error: fetchError } = await getAvailableDonations();
+        
+        if (fetchError) throw new Error(fetchError);
+        
+        Logger.log('Donations fetched successfully', {
+          context: { count: fetchedDonations.length },
+          transactionId: opTxId
+        });
+        
+        setDonations(fetchedDonations);
+        setError(null);
+      } catch (err) {
+        Logger.error('Failed to load donations', err as Error, {}, opTxId);
+        setError('Failed to load donations. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    });
   };
 
+  // Setup subscription for real-time updates
   useEffect(() => {
+    Logger.log('Setting up real-time subscription for donations', {
+      transactionId: txId
+    });
+    
+    // Create channel for listening to donation changes
+    if (!channelRef.current) {
+      const channel = supabase
+        .channel('public:donations')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen for all events
+            schema: 'public',
+            table: 'donations'
+          },
+          (payload) => {
+            Logger.log('Received real-time donation update', { 
+              context: { 
+                event: payload.eventType, 
+                donationId: payload.new?.id || payload.old?.id 
+              },
+              transactionId: txId
+            });
+            
+            // Refresh the donations list when any donation changes
+            loadDonations();
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            Logger.log('Successfully subscribed to donations channel', {
+              transactionId: txId
+            });
+          } else {
+            Logger.log('Subscription error', {
+              level: 'warn',
+              context: { status },
+              transactionId: txId
+            });
+          }
+        });
+        
+      channelRef.current = channel;
+    }
+    
+    // Load donations initially
     loadDonations();
-    const interval = setInterval(loadDonations, 60000);
-
+    
+    // Cleanup subscription on unmount
     return () => {
-      clearInterval(interval);
+      Logger.log('Cleaning up donations subscription', {
+        transactionId: txId
+      });
+      
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, []);
 
-  const handleDonationClick = (donation: Donation) => {
+  const handleDonationClick = (donation: SupabaseDonation) => {
+    Logger.log('User clicked on donation', {
+      context: { donationId: donation.id },
+      transactionId: txId
+    });
+    
+    // Convert to compatible format and navigate
     navigate(`/receive/${donation.id}`, { state: { donation } });
   };
 
@@ -58,7 +135,13 @@ export const Receive = (): JSX.Element => {
 
         <DonationFilters
           selectedFilter={selectedFilter}
-          onFilterChange={setSelectedFilter}
+          onFilterChange={(filter) => {
+            Logger.log('User changed donation filter', {
+              context: { filter },
+              transactionId: txId
+            });
+            setSelectedFilter(filter);
+          }}
         />
 
         {error && (

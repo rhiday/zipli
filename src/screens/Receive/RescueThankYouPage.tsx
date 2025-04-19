@@ -1,13 +1,41 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from "../../components/ui/button";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "../../components/Layout";
 import { CheckCircle2 } from 'lucide-react';
+import Logger from '../../lib/logger';
+import { SupabaseDonation } from '../../types/donation';
 
 export const RescueThankYouPage = (): JSX.Element => {
+  const txId = Logger.generateTransactionId();
   const navigate = useNavigate();
   const location = useLocation();
-  const donation = location.state?.donation;
+  const donation = location.state?.donation as SupabaseDonation;
+  
+  useEffect(() => {
+    Logger.log('Rescue thank you page viewed', {
+      context: { donationId: donation?.id },
+      transactionId: txId
+    });
+  }, [donation]);
+
+  // Helper function to extract pickup time regardless of format
+  const getPickupTime = (): string => {
+    if (!donation) return '16:00';
+    
+    // Handle both formats
+    const pickupTimeStr = donation.pickup_time || '';
+    const timePart = pickupTimeStr.split('until ')[1] || pickupTimeStr;
+    return timePart || '16:00';
+  };
+
+  const handleFinish = () => {
+    Logger.log('User completed rescue process', {
+      context: { donationId: donation?.id },
+      transactionId: txId
+    });
+    navigate('/');
+  };
 
   return (
     <Layout>
@@ -20,7 +48,7 @@ export const RescueThankYouPage = (): JSX.Element => {
             Thank you for<br />rescuing this food!
           </h1>
           <p className="text-xl font-medium text-center">
-            Pickup until {donation?.pickupTime?.split('until ')[1] || '16:00'}<br />
+            Pickup until {getPickupTime()}<br />
             today
           </p>
         </div>
@@ -32,7 +60,7 @@ export const RescueThankYouPage = (): JSX.Element => {
         </div>
 
         <Button 
-          onClick={() => navigate('/')}
+          onClick={handleFinish}
           className="w-full h-12 bg-[#085f33] hover:bg-[#064726] text-white rounded-full text-lg"
         >
           Finish

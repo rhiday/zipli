@@ -1,6 +1,18 @@
-import { DonationItem } from '../types/donation';
+import { DonationItem, SupabaseDonation } from '../types/donation';
 
-export const sortDonations = (donations: DonationItem[], filter: string): DonationItem[] => {
+// Helper function to extract pickup time regardless of format
+const getPickupTime = (donation: DonationItem | SupabaseDonation): string => {
+  if ('pickupTime' in donation && donation.pickupTime) {
+    return donation.pickupTime.split('until ')[1] || '';
+  }
+  if ('pickup_time' in donation && donation.pickup_time) {
+    return donation.pickup_time.split('until ')[1] || '';
+  }
+  return '';
+};
+
+// Generic function that works with either type
+export const sortDonations = <T extends DonationItem | SupabaseDonation>(donations: T[], filter: string): T[] => {
   const sortedDonations = [...donations];
 
   switch (filter) {
@@ -27,8 +39,8 @@ export const sortDonations = (donations: DonationItem[], filter: string): Donati
     case 'pickup-asc':
     case 'pickup-desc': {
       sortedDonations.sort((a, b) => {
-        const timeA = a.pickupTime.split('until ')[1] || '';
-        const timeB = b.pickupTime.split('until ')[1] || '';
+        const timeA = getPickupTime(a);
+        const timeB = getPickupTime(b);
         return filter === 'pickup-desc' 
           ? timeB.localeCompare(timeA)
           : timeA.localeCompare(timeB);

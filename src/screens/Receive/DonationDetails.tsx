@@ -1,38 +1,74 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { DonationItem } from '../../types/donation';
+import { AlertCircle } from 'lucide-react';
+import { updateDonationStatus } from '../../lib/donations';
+import { supabase } from '../../lib/supabase';
+import Logger from '../../lib/logger';
+import type { Database } from '../../types/supabase';
 
-const STORAGE_KEY = 'donations';
+type Donation = Database['public']['Tables']['donations']['Row'];
 
 export const DonationDetails = (): JSX.Element => {
+  const txId = Logger.generateTransactionId();
   const location = useLocation();
   const navigate = useNavigate();
-  const donation = location.state?.donation as DonationItem;
+  const donation = location.state?.donation as Donation;
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleRequestPickup = () => {
-    try {
-      // Load all donations
-      const storedDonations = localStorage.getItem(STORAGE_KEY);
-      if (!storedDonations) return;
-
-      const donations = JSON.parse(storedDonations);
-      
-      // Update the status of the current donation
-      const updatedDonations = donations.map((d: DonationItem) => 
-        d.id === donation.id ? { ...d, status: 'completed' } : d
-      );
-
-      // Save back to localStorage
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDonations));
-
-      // Navigate to thank you page
-      navigate('/receive/thank-you', { state: { donation } });
-    } catch (error) {
-      console.error('Error updating donation status:', error);
-    }
+  const handleRequestPickup = async () => {
+    return Logger.trackOperation('requestDonationPickup', async (opTxId) => {
+      try {
+        setIsProcessing(true);
+        setError(null);
+        
+        // Check if user is authenticated
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('You must be logged in to rescue a donation');
+        }
+        
+        // Check if user is trying to claim their own donation
+        if (donation.organization_id === user.id) {
+          Logger.log('User attempted to claim their own donation', {
+            level: 'warn',
+            context: { donationId: donation.id, userId: user.id },
+            transactionId: opTxId
+          });
+          throw new Error('You cannot rescue your own donation');
+        }
+        
+        Logger.log('Attempting to update donation status', {
+          context: { donationId: donation.id },
+          transactionId: opTxId
+        });
+        
+        // Update donation status in Supabase
+        const { donation: updatedDonation, error: updateError } = await updateDonationStatus(donation.id, 'completed');
+        
+        if (updateError) {
+          throw new Error(updateError);
+        }
+        
+        Logger.log('Donation rescued successfully', {
+          context: { donationId: donation.id },
+          transactionId: opTxId
+        });
+        
+        // Navigate to thank you page
+        navigate('/receive/thank-you', { state: { donation: updatedDonation || donation } });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to rescue donation';
+        Logger.error('Failed to rescue donation', err as Error, { 
+          donationId: donation?.id 
+        }, opTxId);
+        setError(errorMessage);
+        setIsProcessing(false);
+      }
+    });
   };
 
   if (!donation) {
@@ -69,6 +105,13 @@ export const DonationDetails = (): JSX.Element => {
           <h1 className="text-2xl font-medium">Donation Details</h1>
         </div>
 
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4 flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-500" />
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
         <div className="space-y-6 mb-8">
           <div className="aspect-square w-full bg-gray-200 rounded-lg overflow-hidden">
             <div className="w-full h-full flex items-center justify-center">
@@ -83,7 +126,7 @@ export const DonationDetails = (): JSX.Element => {
                 <p>Total Quantity: {donation.quantity}</p>
                 <p>Location: {donation.location}</p>
                 <p>Distance: {donation.distance}</p>
-                <p>Pickup Time: {donation.pickupTime}</p>
+                <p>Pickup Time: {donation.pickup_time}</p>
               </div>
             </div>
           </Card>
@@ -101,13 +144,19 @@ export const DonationDetails = (): JSX.Element => {
         <div className="space-y-4">
           <Button 
             onClick={handleRequestPickup}
-            className="w-full h-12 bg-[#085f33] hover:bg-[#064726] text-white rounded-full text-lg"
+            disabled={isProcessing}
+            className={`w-full h-12 ${
+              isProcessing 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-[#085f33] hover:bg-[#064726]'
+            } text-white rounded-full text-lg`}
           >
-            Rescue
+            {isProcessing ? 'Processing...' : 'Rescue'}
           </Button>
           <Button 
             onClick={() => navigate(-1)}
             variant="outline"
+            disabled={isProcessing}
             className="w-full h-12 bg-white border-2 border-[#085f33] text-[#085f33] rounded-full text-lg hover:bg-[#085f33] hover:text-white"
           >
             Back
