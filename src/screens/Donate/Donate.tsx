@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Separator } from "../../components/ui/separator";
@@ -23,7 +23,6 @@ export const Donate = (): JSX.Element => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null); // Ref to hold the channel
 
   const availableMonths = [
     "February 2025",
@@ -35,39 +34,37 @@ export const Donate = (): JSX.Element => {
   const activeDonations = donations.filter(d => d.status === 'active');
   const completedDonations = donations.filter(d => d.status === 'completed');
 
-  const fetchDonations = async () => {
-    // Fetch user ID if not already fetched
-    let currentUserId = userId;
-    if (!currentUserId) {
+  // Memoize fetchDonations to avoid recreating it on each render
+  const fetchDonations = useCallback(async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-        currentUserId = user.id;
-      } else {
+      if (!user) {
         setError('User not authenticated');
-        return; // Can't load donations without user ID
+        return;
       }
+      
+      setUserId(user.id);
+      
+      const { donations: fetchedDonations, error: fetchError } = await getDonations();
+      if (fetchError) throw new Error(fetchError);
+      
+      // Deduplicate donations by ID before setting state
+      const uniqueDonations = Array.from(
+        new Map(fetchedDonations.map(item => [item.id, item])).values()
+      );
+      
+      setDonations(uniqueDonations);
+      setError(null); // Clear any previous errors
+    } catch (err) {
+      console.error('Error loading donations:', err);
+      setError('Failed to load donations');
     }
-    
-    // Proceed to fetch donations using the currentUserId
-    if (currentUserId) {
-        try {
-            const { donations: fetchedDonations, error: fetchError } = await getDonations(); // Assumes getDonations uses the logged-in user context correctly
-            if (fetchError) throw new Error(fetchError);
-            setDonations(fetchedDonations);
-        } catch (err) {
-            console.error('Error loading donations:', err);
-            setError('Failed to load donations');
-        }
-    }
-  };
+  }, []);
 
   const handleDeleteDonation = async (id: string) => {
     try {
       const { error } = await deleteDonationFromDb(id);
       if (error) throw new Error(error);
-      // No need to call fetchDonations here if delete also triggers realtime (or handle delete event)
-      // For simplicity, let's remove the deleted item directly from state or rely on a DELETE subscription later
       setDonations(currentDonations => currentDonations.filter(d => d.id !== id));
     } catch (error) {
       console.error('Error deleting donation:', error);
@@ -75,64 +72,24 @@ export const Donate = (): JSX.Element => {
     }
   };
 
+  // Initial data fetch on component mount
   useEffect(() => {
-    // Get user ID first
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id);
-        // Initial fetch
-        fetchDonations();
+    fetchDonations();
+  }, []); 
 
-        // --- Setup Realtime Subscription --- 
-        // Ensure only one channel is created
-        if (!channelRef.current) {
-            channelRef.current = supabase
-            .channel('public:donations') // Use a specific channel name
-            .on(
-                'postgres_changes',
-                {
-                event: 'INSERT', // Listen only for inserts
-                schema: 'public',
-                table: 'donations',
-                // We filter client-side because RLS handles row visibility
-                }, 
-                (payload) => {
-                    console.log('[DEBUG] Realtime INSERT received (any user):', payload); // Temporarily log all inserts
-                    // Check if the new donation belongs to the current user
-                    const newDonation = payload.new as Donation;
-                    // Temporarily commenting out the user ID check for debugging
-                    // if (newDonation.organization_id === user.id) { 
-                        console.log('[DEBUG] Reloading donations list due to any insert...');
-                        // Option 1: Refetch all donations (simple, ensures consistency)
-                        fetchDonations(); 
-                    // }
-                }
-            )
-            .subscribe((status, err) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('Successfully subscribed to donations channel!');
-                } 
-                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                     console.error('Donations channel subscription error:', status, err);
-                     setError('Connection issue: Could not sync donations in real-time.');
-                }
-            });
-        }
-      } else {
-        setError('User not authenticated for realtime updates.');
-      }
-    });
-
-    // --- Cleanup Function --- 
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-          .then(() => console.log('Unsubscribed from donations channel.'))
-          .catch(err => console.error('Error unsubscribing from donations channel:', err));
-        channelRef.current = null; // Clear the ref
-      }
+  // Add a "focus" event listener to refresh data when user returns to tab
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('Window focused, refreshing donations');
+      fetchDonations();
     };
-  }, []); // Run only on mount
+
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchDonations]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -195,6 +152,38 @@ export const Donate = (): JSX.Element => {
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* Active Donations Section */}
+        {activeDonations.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-lg font-medium mb-3">Active donations</h2>
+            <div className="space-y-3">
+              {activeDonations.map((donation) => (
+                <Card key={donation.id} className="bg-[#fff0f2] border-none">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-16 bg-[#f2d4d8] rounded-lg flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 size={20} className="text-[#085f33]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium truncate">{donation.title}</h3>
+                        <p className="text-sm text-gray-600">{donation.pickup_time}</p>
+                        <p className="text-sm text-gray-600">{donation.location}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteDonation(donation.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label="Delete donation"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
 

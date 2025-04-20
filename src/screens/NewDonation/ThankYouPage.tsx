@@ -1,15 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Button } from "../../components/ui/button";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "../../components/Layout";
 import { CheckCircle2, CircleDot } from 'lucide-react';
+import { createDonation } from "../../lib/donations";
+
+interface FoodItem {
+  title: string;
+  quantity: string;
+}
 
 export const ThankYouPage = (): JSX.Element => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items = [] as Array<{title: string, quantity: string}>, pickupDate, pickupTime, address, driverInstructions } = location.state || {};
+  const { items = [] as FoodItem[], pickupDate, pickupTime, address, driverInstructions } = location.state || {};
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const hasCreatedDonation = useRef(false);
 
   // Format date for display
   const formatDate = (date: string | Date) => {
@@ -26,28 +33,52 @@ export const ThankYouPage = (): JSX.Element => {
   };
 
   useEffect(() => {
-    // Here you would typically make an API call to save the donation
-    // For now, we'll simulate the process
     const saveDonation = async () => {
+      if (hasCreatedDonation.current) return;
+      hasCreatedDonation.current = true;
+
       setIsProcessing(true);
       
       try {
-        // Replace with actual API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Create the donation description from items
+        const description = items.map((item: FoodItem) => `${item.title}: ${item.quantity}`).join('\n');
         
-        // For demo purposes, we'll assume success
-        // In a real app, this would call a backend API
-        console.log('Donation saved with:', { items, pickupDate, pickupTime, address, driverInstructions });
+        // Format the title as the first item + count of additional items
+        const title = items.length > 1 
+          ? `${items[0].title} + ${items.length - 1} more`
+          : items[0].title;
+
+        // Add driver instructions to the description if provided
+        const fullDescription = driverInstructions 
+          ? `${description}\n\nDriver Instructions: ${driverInstructions}`
+          : description;
+
+        const { donation, error: saveError } = await createDonation({
+          title,
+          description: fullDescription,
+          quantity: items.map((item: FoodItem) => item.quantity).join(', '),
+          location: address,
+          distance: '0 km', // Default distance for new donations
+          pickup_time: `${formatDate(pickupDate)} ${pickupTime}`,
+          status: 'active'
+        });
+
+        if (saveError) throw new Error(saveError);
         
         setIsProcessing(false);
       } catch (err) {
         console.error('Error saving donation:', err);
         setError('Failed to save donation. Please try again.');
         setIsProcessing(false);
+        hasCreatedDonation.current = false;
       }
     };
     
     saveDonation();
+
+    return () => {
+      hasCreatedDonation.current = false;
+    };
   }, [items, pickupDate, pickupTime, address, driverInstructions]);
 
   const handleViewDonations = () => {
@@ -76,7 +107,7 @@ export const ThankYouPage = (): JSX.Element => {
             </div>
             <div className="pl-7">
               {items && items.length > 0 ? (
-                items.map((item: {title: string, quantity: string}, index: number) => (
+                items.map((item: FoodItem, index: number) => (
                   <div key={index} className="py-2 border-b border-gray-100 last:border-0">
                     {item.title}, {item.quantity}
                   </div>

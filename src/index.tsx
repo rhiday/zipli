@@ -24,6 +24,14 @@ import { EmailVerification } from "./screens/Auth/EmailVerification";
 import { useAuth } from "./components/AuthProvider";
 import { NotFound } from "./screens/NotFound";
 import { UserProfile } from "./screens/Profile/UserProfile";
+import { ErrorPage } from "./screens/ErrorPage";
+import { DonationConfirmation } from "./screens/NewDonation/DonationConfirmation";
+import { AuthLayout } from "./screens/Auth/AuthLayout";
+import { RequireAuth } from "./components/RequireAuth";
+import { NewRequest } from "./screens/Request/NewRequest";
+import { RequestCalendar } from "./screens/Request/RequestCalendar";
+import { RequestConfirm } from "./screens/Request/RequestConfirm";
+import { RequestThankYou } from "./screens/Request/RequestThankYou";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -46,7 +54,7 @@ createRoot(document.getElementById("app") as HTMLElement).render(
         <Router>
           <Routes>
           {/* Public Routes */}
-          <Route path="/auth" element={<Auth />} />
+          <Route path="/auth" element={<AuthLayout />} />
           <Route path="/signin" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/auth/verify/success" element={<VerificationSuccess />} />
@@ -74,6 +82,26 @@ createRoot(document.getElementById("app") as HTMLElement).render(
           <Route path="/receive" element={
             <ProtectedRoute>
               <Receive />
+            </ProtectedRoute>
+          } />
+          <Route path="/request/new" element={
+            <ProtectedRoute>
+              <NewRequest />
+            </ProtectedRoute>
+          } />
+          <Route path="/request/calendar" element={
+            <ProtectedRoute>
+              <RequestCalendar />
+            </ProtectedRoute>
+          } />
+          <Route path="/request/confirm" element={
+            <ProtectedRoute>
+              <RequestConfirm />
+            </ProtectedRoute>
+          } />
+          <Route path="/request/thank-you" element={
+            <ProtectedRoute>
+              <RequestThankYou />
             </ProtectedRoute>
           } />
           <Route path="/new-donation/thank-you" element={
@@ -109,6 +137,11 @@ createRoot(document.getElementById("app") as HTMLElement).render(
           <Route path="/profile" element={
             <ProtectedRoute>
               <UserProfile />
+            </ProtectedRoute>
+          } />
+          <Route path="/donate/confirmation" element={
+            <ProtectedRoute>
+              <DonationConfirmation />
             </ProtectedRoute>
           } />
           

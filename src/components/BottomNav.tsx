@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 export const BottomNav = (): JSX.Element => {
   const location = useLocation();
   const navigate = useNavigate();
-  const currentTab = location.pathname.includes('/receive') ? 'receive' : 'donate';
+  const currentTab = location.pathname.includes('/receive') || location.pathname.includes('/request') ? 'receive' : 'donate';
 
   const handleTabChange = (value: string) => {
     if (value === 'receive') {
