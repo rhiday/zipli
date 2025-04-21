@@ -11,43 +11,47 @@ import Logger from "../../lib/logger";
 import { SupabaseDonation, supabaseToDonationItem } from "../../types/donation";
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Button } from "../../components/ui/button";
-import { Plus, Calendar, Clock, ChevronRight, CircleDot } from "lucide-react";
+import { Plus, Calendar, Clock, ChevronRight, CircleDot, Trash2 } from "lucide-react";
+import { useAuth } from "../../components/AuthProvider";
 
 // Define interface for user requests
 interface UserRequest {
   id: string;
   description: string;
-  peopleCount: number;
-  pickupDate: Date;
-  pickupTime: string;
+  people_count: number; // Renamed to match DB
+  pickup_date: string; // Changed type to string for DB compatibility
+  pickup_time: string;
   status: 'active' | 'completed' | 'cancelled';
-  createdAt: Date;
+  created_at: string; // Changed type to string for DB compatibility
+  user_id: string; // Added user_id
 }
 
-// Mock function for user's requests - in a real app, you would fetch this from your database
-const getUserRequests = async (): Promise<{ requests: UserRequest[], error: string | null }> => {
+// Function to fetch user's requests from Supabase
+const getUserRequests = async (userId: string): Promise<{ requests: UserRequest[], error: string | null }> => {
   try {
-    // This would be replaced with a real API call
-    // For now, just return mock data
-    const mockRequests: UserRequest[] = [
-      {
-        id: '1',
-        description: 'Non-perishable items like rice, pasta, canned vegetables',
-        peopleCount: 3,
-        pickupDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-        pickupTime: '12:00 PM - 2:00 PM',
-        status: 'active',
-        createdAt: new Date()
-      }
-    ];
+    const { data: requests, error } = await supabase
+      .from('requests')
+      .select('*')
+      .eq('user_id', userId) // Filter by user ID
+      .order('created_at', { ascending: false }); // Optional: order by creation date
+
+    if (error) {
+      Logger.error('Failed to fetch user requests', error, { userId });
+      throw error;
+    }
     
-    return { requests: mockRequests, error: null };
+    // Ensure data conforms to UserRequest interface (basic check)
+    const typedRequests = requests as UserRequest[];
+
+    return { requests: typedRequests || [], error: null };
   } catch (error) {
-    return { requests: [], error: 'Failed to fetch requests' };
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch requests';
+    return { requests: [], error: errorMessage };
   }
 };
 
 export const Receive = (): JSX.Element => {
+  const { user, loading } = useAuth(); // Get user and loading state from auth context
   const txId = Logger.generateTransactionId();
   const location = useLocation();
   const navigate = useNavigate();
@@ -57,7 +61,9 @@ export const Receive = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRequestsLoading, setIsRequestsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const requestsChannelRef = useRef<RealtimeChannel | null>(null); // Add ref for requests channel
 
   // Only show active donations in the receive feed
   const activeDonations = donations.filter(d => d.status === 'active');
@@ -91,17 +97,24 @@ export const Receive = (): JSX.Element => {
   };
 
   const loadUserRequests = async () => {
+    if (!user) {
+      setIsRequestsLoading(false);
+      return; // Don't load if user is not logged in
+    }
     try {
       setIsRequestsLoading(true);
-      const { requests, error: requestsError } = await getUserRequests();
+      const { requests, error: requestsError } = await getUserRequests(user.id); // Pass user.id
       
       if (requestsError) {
         console.error('Failed to load user requests:', requestsError);
+        setError(requestsError); // Set error state
       } else {
         setUserRequests(requests);
+        setError(null); // Clear error on success
       }
     } catch (err) {
       console.error('Error loading user requests:', err);
+      setError('An unexpected error occurred while loading requests.'); // Set generic error
     } finally {
       setIsRequestsLoading(false);
     }
@@ -109,54 +122,108 @@ export const Receive = (): JSX.Element => {
 
   // Setup subscription for real-time updates
   useEffect(() => {
-    Logger.log('Setting up real-time subscription for donations', {
-      transactionId: txId
-    });
-    
-    // Create channel for listening to donation changes
-    if (!channelRef.current) {
-      const channel = supabase
-        .channel('public:donations')
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Listen for all events
-            schema: 'public',
-            table: 'donations'
-          },
-          (payload) => {
-            Logger.log('Received real-time donation update', { 
-              context: { 
-                event: payload.eventType, 
-                donationId: payload.new?.id || payload.old?.id 
-              },
-              transactionId: txId
-            });
-            
-            // Refresh the donations list when any donation changes
-            loadDonations();
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            Logger.log('Successfully subscribed to donations channel', {
-              transactionId: txId
-            });
-          } else {
-            Logger.log('Subscription error', {
-              level: 'warn',
-              context: { status },
-              transactionId: txId
-            });
-          }
-        });
-        
-      channelRef.current = channel;
+    // Only run if user is loaded
+    if (!user && !loading) {
+      // If not loading and no user, clear requests and stop
+      setUserRequests([]);
+      setIsRequestsLoading(false);
+      return;
     }
-    
-    // Load donations and user requests initially
-    loadDonations();
-    loadUserRequests();
+
+    if (user) {
+      Logger.log('Setting up real-time subscription for donations', {
+        transactionId: txId
+      });
+      
+      // Create channel for listening to donation changes
+      if (!channelRef.current) {
+        const donationsChannel = supabase
+          .channel('public:donations') // Rename for clarity
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'donations'
+            },
+            (payload) => {
+              Logger.log('Received real-time donation update', { 
+                context: { 
+                  event: payload.eventType, 
+                  donationId: payload.new && typeof payload.new === 'object' && 'id' in payload.new 
+                    ? payload.new.id 
+                    : (payload.old && typeof payload.old === 'object' && 'id' in payload.old ? payload.old.id : undefined)
+                },
+                transactionId: txId
+              });
+              
+              // Refresh the donations list when any donation changes
+              loadDonations();
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              Logger.log('Successfully subscribed to donations channel', {
+                transactionId: txId
+              });
+            } else {
+              Logger.log('Subscription error', {
+                level: 'warn',
+                context: { status },
+                transactionId: txId
+              });
+            }
+          });
+          
+        channelRef.current = donationsChannel; // Assign to correct ref
+      }
+
+      // Create channel for listening to the user's requests changes
+      if (!requestsChannelRef.current) {
+        const requestsChannel = supabase
+          .channel('public:requests')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'requests',
+              filter: `user_id=eq.${user.id}` // Only listen to changes for the current user
+            },
+            (payload) => {
+              Logger.log('Received real-time request update', { 
+                context: { 
+                  event: payload.eventType,
+                  requestId: payload.new && typeof payload.new === 'object' && 'id' in payload.new
+                    ? payload.new.id
+                    : (payload.old && typeof payload.old === 'object' && 'id' in payload.old ? payload.old.id : undefined)
+                },
+                transactionId: txId
+              });
+              // Refresh the user requests list
+              loadUserRequests(); 
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              Logger.log('Successfully subscribed to requests channel', {
+                transactionId: txId
+              });
+            } else {
+              Logger.log('Requests subscription error', {
+                level: 'warn',
+                context: { status },
+                transactionId: txId
+              });
+            }
+          });
+        requestsChannelRef.current = requestsChannel; // Assign to the new ref
+      }
+      
+      // Load donations and user requests initially
+      loadDonations();
+      loadUserRequests(); // loadUserRequests will now use the logged-in user's ID
+    }
     
     // Cleanup subscription on unmount
     return () => {
@@ -168,8 +235,14 @@ export const Receive = (): JSX.Element => {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+      // Cleanup requests subscription
+      if (requestsChannelRef.current) {
+        Logger.log('Cleaning up requests subscription', { transactionId: txId });
+        supabase.removeChannel(requestsChannelRef.current);
+        requestsChannelRef.current = null;
+      }
     };
-  }, []);
+  }, [user, loading]); // Add user and loading to dependency array
 
   const handleDonationClick = (donation: SupabaseDonation) => {
     Logger.log('User clicked on donation', {
@@ -186,6 +259,44 @@ export const Receive = (): JSX.Element => {
       transactionId: txId
     });
     navigate('/request/new');
+  };
+
+  // Function to handle request deletion
+  const handleDeleteRequest = async (requestId: string) => {
+    // Optional: Add a confirmation dialog here
+    // if (!window.confirm("Are you sure you want to delete this request?")) {
+    //   return;
+    // }
+
+    setIsDeleting(requestId); // Set loading state for this specific request
+    const deleteTxId = Logger.generateTransactionId();
+
+    try {
+      Logger.log('Deleting request', { context: { requestId }, transactionId: deleteTxId });
+
+      const { error: deleteError } = await supabase
+        .from('requests')
+        .delete()
+        .match({ id: requestId, user_id: user?.id }); // Ensure user can only delete their own
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      Logger.log('Request deleted successfully', { context: { requestId }, transactionId: deleteTxId });
+
+      // Optimistic UI update (remove from local state) - the real-time listener will also update
+      setUserRequests(prevRequests => prevRequests.filter(req => req.id !== requestId));
+      // Or rely solely on the real-time update by calling loadUserRequests() if preferred
+      // loadUserRequests(); 
+      
+    } catch (err: any) {
+      Logger.error('Failed to delete request', err, { requestId }, deleteTxId);
+      // Display error to user (e.g., using a toast notification or setting error state)
+      setError("Failed to delete request. Please try again.");
+    } finally {
+      setIsDeleting(null); // Clear loading state
+    }
   };
 
   // Format date for display
@@ -234,27 +345,44 @@ export const Receive = (): JSX.Element => {
                   key={request.id}
                   className="bg-[#F1F5F9] rounded-xl p-4 border border-gray-200"
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium">Request #{request.id}</h3>
-                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                      Active
-                    </span>
+                  <div className="flex justify-between items-start mb-2 gap-2">
+                    <h3 className="font-medium text-base break-words flex-1">
+                      {request.description}
+                    </h3>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        request.status === 'active' ? 'bg-blue-100 text-blue-800' : 
+                        request.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteRequest(request.id)}
+                        disabled={isDeleting === request.id}
+                        className={`p-1 text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                        aria-label="Delete request"
+                      >
+                        {isDeleting === request.id ? (
+                          <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-700 mb-3 line-clamp-2">
-                    {request.description}
-                  </p>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mt-3">
                     <div className="flex items-center">
                       <Calendar size={14} className="mr-1" />
-                      {formatDate(request.pickupDate)}
+                      {formatDate(new Date(request.pickup_date))}
                     </div>
                     <div className="flex items-center">
                       <Clock size={14} className="mr-1" />
-                      {request.pickupTime}
+                      {request.pickup_time}
                     </div>
                     <div className="flex items-center">
                       <CircleDot size={14} className="mr-1" />
-                      {request.peopleCount} {request.peopleCount === 1 ? 'person' : 'people'}
+                      {request.people_count} {request.people_count === 1 ? 'person' : 'people'}
                     </div>
                   </div>
                 </div>
@@ -263,12 +391,6 @@ export const Receive = (): JSX.Element => {
           ) : (
             <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-200">
               <p className="text-gray-600 mb-4">You haven't made any requests yet</p>
-              <Button 
-                onClick={handleMakeRequest}
-                className="bg-[#085f33] hover:bg-[#064726] text-white rounded-full"
-              >
-                Make Your First Request
-              </Button>
             </div>
           )}
         </div>

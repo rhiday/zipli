@@ -54,7 +54,7 @@ createRoot(document.getElementById("app") as HTMLElement).render(
         <Router>
           <Routes>
           {/* Public Routes */}
-          <Route path="/auth" element={<AuthLayout />} />
+          <Route path="/auth" element={<Auth />} />
           <Route path="/signin" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/auth/verify/success" element={<VerificationSuccess />} />

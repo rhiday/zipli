@@ -4,6 +4,9 @@ import { Layout } from "../../components/Layout";
 import { Button } from "../../components/ui/button";
 import { CircleDot, Pencil, ChevronLeft, AlertTriangle } from "lucide-react";
 import { Card } from "../../components/ui/card";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../components/AuthProvider";
+import Logger from "../../lib/logger";
 
 // Mock function to get user address (would be replaced with real address fetching)
 const getUserAddress = () => {
@@ -17,6 +20,7 @@ const getUserAddress = () => {
 export const RequestConfirm = (): JSX.Element => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const { description, peopleCount, allergens, pickupDate, pickupTime } = location.state || {};
   const [driverInstructions, setDriverInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,24 +56,68 @@ export const RequestConfirm = (): JSX.Element => {
     });
   };
   
-  const handleSubmit = () => {
-    setIsSubmitting(true);
+  const handleSubmit = async () => {
+    if (!user) {
+      setError("You must be logged in to submit a request.");
+      return;
+    }
     
-    // Simulate API call to submit request
-    setTimeout(() => {
-      // Navigate to thank you page
+    if (!pickupDate) {
+        setError("Pickup date is missing.");
+        return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    const txId = Logger.generateTransactionId();
+
+    try {
+      Logger.log('Submitting new request', { context: { userId: user.id }, transactionId: txId });
+
+      // Format date to YYYY-MM-DD for Supabase DATE type
+      const formattedPickupDate = pickupDate.toISOString().split('T')[0];
+      
+      const { data, error: insertError } = await supabase
+        .from('requests')
+        .insert([
+          {
+            user_id: user.id,
+            description: description,
+            people_count: peopleCount,
+            pickup_date: formattedPickupDate,
+            pickup_time: pickupTime,
+            // status defaults to 'active' in the DB
+            // created_at defaults to now() in the DB
+            // Consider adding driver_instructions if you add the column to the table
+          }
+        ])
+        .select(); // Optionally select the inserted data if needed
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      Logger.log('Request submitted successfully', { context: { requestId: data?.[0]?.id }, transactionId: txId });
+
+      // Navigate to thank you page on success
       navigate('/request/thank-you', {
+        replace: true, // Replace history state so back button doesn't resubmit
         state: {
           description,
           peopleCount,
           allergens,
           pickupDate,
           pickupTime,
-          address: formattedAddress,
-          driverInstructions
+          // Pass the newly created request data if needed by the thank you page
+          // newRequest: data?.[0] 
         }
       });
-    }, 1000);
+
+    } catch (err: any) {
+      Logger.error('Failed to submit request', err, { userId: user.id }, txId);
+      setError(err.message || "An error occurred while submitting the request. Please try again.");
+      setIsSubmitting(false);
+    }
   };
   
   const handleEditDetails = () => {
