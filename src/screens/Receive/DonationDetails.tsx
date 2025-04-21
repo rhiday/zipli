@@ -4,7 +4,6 @@ import { Layout } from '../../components/Layout';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { AlertCircle } from 'lucide-react';
-import { updateDonationStatus } from '../../lib/donations';
 import { supabase } from '../../lib/supabase';
 import Logger from '../../lib/logger';
 import type { Database } from '../../types/supabase';
@@ -20,18 +19,36 @@ export const DonationDetails = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
 
   const handleRequestPickup = async () => {
+    // Check if donation exists
+    if (!donation) {
+      setError('Donation details not found.');
+      return;
+    }
+
+    // --- Confirmation Dialog --- 
+    const confirmationMessage = `Confirm pickup for donation:
+
+Location: ${donation.location}
+Pickup Time: ${donation.pickup_time}
+
+Do you want to proceed?`;
+
+    if (!window.confirm(confirmationMessage)) {
+      Logger.log('User cancelled donation rescue', { context: { donationId: donation.id } });
+      return; // User cancelled
+    }
+    // --- End Confirmation Dialog ---
+
     return Logger.trackOperation('requestDonationPickup', async (opTxId) => {
       try {
         setIsProcessing(true);
         setError(null);
         
-        // Check if user is authenticated
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           throw new Error('You must be logged in to rescue a donation');
         }
         
-        // Check if user is trying to claim their own donation
         if (donation.organization_id === user.id) {
           Logger.log('User attempted to claim their own donation', {
             level: 'warn',
@@ -41,25 +58,51 @@ export const DonationDetails = (): JSX.Element => {
           throw new Error('You cannot rescue your own donation');
         }
         
-        Logger.log('Attempting to update donation status', {
-          context: { donationId: donation.id },
+        Logger.log('Attempting to update donation status and set rescuer', {
+          context: { donationId: donation.id, rescuerId: user.id },
           transactionId: opTxId
         });
         
-        // Update donation status in Supabase
-        const { donation: updatedDonation, error: updateError } = await updateDonationStatus(donation.id, 'completed');
-        
+        // --- Update donation in Supabase --- 
+        const { data: updatedData, error: updateError } = await supabase
+          .from('donations')
+          .update({ 
+            status: 'completed', 
+            rescuer_id: user.id 
+          })
+          .match({ id: donation.id, status: 'active' }) // Match on ID and ensure it's still active
+          .select() // Select the updated row
+          .single(); // Expect a single row update
+
         if (updateError) {
-          throw new Error(updateError);
+          // Check if the error is because the donation was already taken (no rows updated)
+          if (updateError.code === 'PGRST116') { // PostgREST code for "Requested range not satisfiable"
+             Logger.log('Donation already claimed or no longer active', { context: { donationId: donation.id }, transactionId: opTxId });
+             throw new Error('This donation is no longer available or has already been claimed.');
+          }
+          throw updateError; // Re-throw other errors
         }
         
-        Logger.log('Donation rescued successfully', {
+        if (!updatedData) {
+            // Should theoretically not happen if updateError is null and single() is used, but good to check
+            throw new Error('Failed to update donation status, but no error was reported.');
+        }
+        // --- End Update donation --- 
+        
+        // TODO: Call Edge Function here to send email to donor
+        // await supabase.functions.invoke('send-rescue-confirmation', { 
+        //   body: { donationId: donation.id, rescuerId: user.id } 
+        // });
+        // Logger.log('Triggered email confirmation function', { context: { donationId: donation.id }, transactionId: opTxId });
+
+        Logger.log('Donation rescued successfully in DB', {
           context: { donationId: donation.id },
           transactionId: opTxId
         });
         
-        // Navigate to thank you page
-        navigate('/receive/thank-you', { state: { donation: updatedDonation || donation } });
+        // Navigate to thank you page, passing the UPDATED donation data
+        navigate('/receive/thank-you', { replace: true, state: { donation: updatedData } }); 
+        
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to rescue donation';
         Logger.error('Failed to rescue donation', err as Error, { 
