@@ -19,6 +19,7 @@ export const RescueConfirm = (): JSX.Element => {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (!donation) {
     // Handle case where donation data is missing (e.g., direct navigation)
@@ -36,58 +37,38 @@ export const RescueConfirm = (): JSX.Element => {
 
   const handleConfirmRescue = async () => {
     const txId = Logger.generateTransactionId();
-    return Logger.trackOperation('confirmDonationRescue', async (opTxId) => {
+    return Logger.trackOperation('mockConfirmDonationRescue', async (opTxId) => {
+      setError(null);
+      setSuccessMessage(null);
+      setIsProcessing(true);
+
       try {
-        setIsProcessing(true);
-        setError(null);
-        
         if (!user) {
           throw new Error('You must be logged in to rescue a donation');
         }
         
         if (donation.organization_id === user.id) {
-          // This check should ideally happen before navigating here, but double-check
           throw new Error('You cannot rescue your own donation');
         }
         
-        Logger.log('Confirming rescue: Updating donation status and setting rescuer', {
-          context: { donationId: donation.id, rescuerId: user.id },
+        Logger.log('Mocking donation rescue confirmation', {
+          context: { donationId: donation.id, userId: user.id },
           transactionId: opTxId
         });
-        
-        const { data: updatedData, error: updateError } = await supabase
-          .from('donations')
-          .update({ 
-            status: 'completed', 
-            rescuer_id: user.id 
-          })
-          .match({ id: donation.id, status: 'active' })
-          .select()
-          .single();
 
-        if (updateError) {
-          if (updateError.code === 'PGRST116') {
-             throw new Error('This donation is no longer available or has already been claimed.');
-          }
-          throw updateError;
-        }
-        
-        if (!updatedData) {
-            throw new Error('Failed to update donation status, but no error was reported.');
-        }
-        
-        // TODO: Call Edge Function here if needed (or maybe call it from thank you page?)
+        await new Promise(resolve => setTimeout(resolve, 750));
 
-        Logger.log('Donation rescued successfully in DB', {
+        Logger.log('Mock rescue confirmation successful', {
           context: { donationId: donation.id },
           transactionId: opTxId
         });
         
-        navigate('/receive/thank-you', { replace: true, state: { donation: updatedData } }); 
-        
+        setSuccessMessage('Confirmation sent to the Donator! (Mocked)');
+        setIsProcessing(false);
+
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to rescue donation';
-        Logger.error('Failed to confirm rescue', err as Error, { donationId: donation.id }, opTxId);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to process mock rescue';
+        Logger.error('Failed to process mock rescue', err as Error, { donationId: donation.id }, opTxId);
         setError(errorMessage);
         setIsProcessing(false);
       }
@@ -142,25 +123,31 @@ export const RescueConfirm = (): JSX.Element => {
           By confirming, you agree to pick up this donation within the specified time frame.
         </p>
 
+        {successMessage && (
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-6 text-center">
+            <p className="text-green-700 font-medium">{successMessage}</p>
+          </div>
+        )}
+
         <div className="space-y-4">
           <Button 
             onClick={handleConfirmRescue}
-            disabled={isProcessing}
+            disabled={isProcessing || !!successMessage}
             className={`w-full h-12 ${
-              isProcessing 
+              (isProcessing || !!successMessage) 
                 ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-[#085f33] hover:bg-[#064726]'
             } text-white rounded-full text-lg`}
           >
-            {isProcessing ? 'Confirming...' : 'Confirm Rescue'}
+            {isProcessing ? 'Confirming...' : (successMessage ? 'Confirmed' : 'Confirm Rescue')}
           </Button>
           <Button 
             onClick={handleCancel}
             variant="outline"
-            disabled={isProcessing}
-            className="w-full h-12 bg-white border-2 border-gray-300 text-gray-700 rounded-full text-lg hover:bg-gray-50"
+            disabled={isProcessing || !!successMessage}
+            className="w-full h-12 bg-white border-2 border-gray-300 text-gray-700 rounded-full text-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Cancel
+            {successMessage ? 'Close' : 'Cancel'}
           </Button>
         </div>
       </div>
