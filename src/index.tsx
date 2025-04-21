@@ -32,6 +32,7 @@ import { NewRequest } from "./screens/Request/NewRequest";
 import { RequestCalendar } from "./screens/Request/RequestCalendar";
 import { RequestConfirm } from "./screens/Request/RequestConfirm";
 import { RequestThankYou } from "./screens/Request/RequestThankYou";
+import { RescueConfirm } from "./screens/Receive/RescueConfirm";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -70,6 +71,11 @@ createRoot(document.getElementById("app") as HTMLElement).render(
           <Route path="/receive/:id" element={
             <ProtectedRoute>
               <DonationDetails />
+            </ProtectedRoute>
+          } />
+          <Route path="/receive/confirm-rescue/:id" element={
+            <ProtectedRoute>
+              <RescueConfirm />
             </ProtectedRoute>
           } />
           
