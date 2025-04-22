@@ -1,0 +1,62 @@
+{
+  "version": "1.0.0",
+  "source": "./index.html",
+  "type": "module",
+  "name": "zipli",
+  "description": "A food donation and rescue platform",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@radix-ui/react-avatar": "^1.0.4",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-popover": "^1.0.7",
+    "@radix-ui/react-separator": "^1.0.3",
+    "@radix-ui/react-slider": "^1.1.2",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-switch": "^1.0.3",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-toast": "^1.1.5",
+    "@supabase/supabase-js": "^2.39.3",
+    "@types/uuid": "^10.0.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.3.1",
+    "hark": "^1.2.3",
+    "jspdf": "^3.0.1",
+    "lamejs": "^1.2.1",
+    "libphonenumber-js": "^1.10.57",
+    "lottie-react": "^2.4.1",
+    "lucide-react": "^0.330.0",
+    "openai": "^4.28.0",
+    "react": "^18.2.0",
+    "react-day-picker": "^8.10.0",
+    "react-dom": "^18.2.0",
+    "react-lottie-player": "^2.1.0",
+    "react-router-dom": "^6.22.0",
+    "recordrtc": "^5.6.2",
+    "tailwind-merge": "^2.2.1",
+    "tesseract.js": "^5.0.5",
+    "uuid": "^11.1.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/dom-speech-recognition": "^0.0.4",
+    "@types/hark": "^1.2.4",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@types/recordrtc": "^5.6.14",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "esbuild": "^0.20.0",
+    "globals": "^15.0.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0"
+  },
+  "alias": {
+    "@/*": "./src/components/ui/$1"
+  }
+}
