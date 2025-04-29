@@ -95,7 +95,7 @@ export const BottomNav = (): JSX.Element => {
             <DialogTitle>What would you like to do?</DialogTitle>
             <DialogDescription>Choose an option below</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 gap-4 py-4">
             <button
               onClick={() => {
                 setIsAddModalOpen(false);
