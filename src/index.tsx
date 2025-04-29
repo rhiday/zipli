@@ -34,20 +34,6 @@ import { RequestConfirm } from "./screens/Request/RequestConfirm";
 import { RequestThankYou } from "./screens/Request/RequestThankYou";
 import { RescueConfirm } from "./screens/Receive/RescueConfirm";
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  return <>{children}</>;
-};
-
 const App = () => {
   const { isLoading } = useAuth();
 
@@ -68,22 +54,20 @@ const App = () => {
       </Route>
 
       {/* Protected routes */}
-      <Route element={<RequireAuth />}>
-        <Route path="/" element={<Donate />} />
-        <Route path="/explore" element={<Explore />} />
-        <Route path="/donations/:id" element={<DonationDetails />} />
-        <Route path="/new-donation" element={<NewDonation />} />
-        <Route path="/new-donation/step2" element={<DonationStep2 />} />
-        <Route path="/new-donation/step3" element={<DonationStep3 />} />
-        <Route path="/new-donation/step4" element={<DonationStep4 />} />
-        <Route path="/new-donation/voice" element={<VoiceInput />} />
-        <Route path="/new-donation/confirmation" element={<DonationConfirmation />} />
-        <Route path="/request" element={<NewRequest />} />
-        <Route path="/request/calendar" element={<RequestCalendar />} />
-        <Route path="/rescue/thank-you" element={<RescueThankYouPage />} />
-        <Route path="/profile" element={<UserProfile />} />
-        <Route path="/messages" element={<div>Messages Coming Soon</div>} />
-      </Route>
+      <Route path="/" element={<RequireAuth><Donate /></RequireAuth>} />
+      <Route path="/explore" element={<RequireAuth><Explore /></RequireAuth>} />
+      <Route path="/donations/:id" element={<RequireAuth><DonationDetails /></RequireAuth>} />
+      <Route path="/new-donation" element={<RequireAuth><NewDonation /></RequireAuth>} />
+      <Route path="/new-donation/step2" element={<RequireAuth><DonationStep2 /></RequireAuth>} />
+      <Route path="/new-donation/step3" element={<RequireAuth><DonationStep3 /></RequireAuth>} />
+      <Route path="/new-donation/step4" element={<RequireAuth><DonationStep4 /></RequireAuth>} />
+      <Route path="/new-donation/voice" element={<RequireAuth><VoiceInput /></RequireAuth>} />
+      <Route path="/new-donation/confirmation" element={<RequireAuth><DonationConfirmation /></RequireAuth>} />
+      <Route path="/request" element={<RequireAuth><NewRequest /></RequireAuth>} />
+      <Route path="/request/calendar" element={<RequireAuth><RequestCalendar /></RequireAuth>} />
+      <Route path="/rescue/thank-you" element={<RequireAuth><RescueThankYouPage /></RequireAuth>} />
+      <Route path="/profile" element={<RequireAuth><UserProfile /></RequireAuth>} />
+      <Route path="/messages" element={<RequireAuth><div>Messages Coming Soon</div></RequireAuth>} />
 
       {/* Public routes */}
       <Route path="/auth" element={<Auth />} />
