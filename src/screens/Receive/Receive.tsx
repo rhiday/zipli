@@ -11,7 +11,7 @@ import Logger from "../../lib/logger";
 import { SupabaseDonation, supabaseToDonationItem } from "../../types/donation";
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Button } from "../../components/ui/button";
-import { Plus, Calendar, Clock, ChevronRight, CircleDot, Trash2 } from "lucide-react";
+import { Plus, Calendar, Clock, ChevronRight, CircleDot, Trash2, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../../components/AuthProvider";
 
 // Define interface for user requests
@@ -70,13 +70,17 @@ export const Receive = (): JSX.Element => {
   const filteredDonations = sortDonations(activeDonations, selectedFilter);
 
   const loadDonations = async () => {
+    // Pass user ID to the fetching function
+    const currentUserId = user?.id; 
     return Logger.trackOperation('loadAvailableDonations', async (opTxId) => {
       try {
-        Logger.log('Fetching available donations', {
-          transactionId: opTxId
+        Logger.log('Fetching available/rescued donations', {
+          transactionId: opTxId,
+          context: { userId: currentUserId } // Log which user we are fetching for
         });
         
-        const { donations: fetchedDonations, error: fetchError } = await getAvailableDonations();
+        // Pass userId here
+        const { donations: fetchedDonations, error: fetchError } = await getAvailableDonations(currentUserId); 
         
         if (fetchError) throw new Error(fetchError);
         
@@ -429,28 +433,55 @@ export const Receive = (): JSX.Element => {
             {filteredDonations.map((donation) => (
               <button
                 key={donation.id}
-                onClick={() => handleDonationClick(donation)}
-                className="w-full text-left focus:outline-none active:opacity-80 transition-opacity"
+                // Disable button and remove click handler if donation is completed
+                onClick={donation.status === 'active' ? () => handleDonationClick(donation) : undefined}
+                disabled={donation.status === 'completed'}
+                className={`w-full text-left focus:outline-none transition-opacity ${
+                  donation.status === 'active' ? 'active:opacity-80 cursor-pointer' : 'opacity-70 cursor-default'
+                }`}
               >
                 <div className="bg-[#fff0f2] rounded-xl overflow-hidden">
                   <div className="flex gap-3 p-3">
+                    {/* Image Display */}
                     <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-400 text-sm">No image</span>
-                      </div>
+                      {donation.image_url ? (
+                        <img 
+                          src={donation.image_url}
+                          alt={donation.title ?? 'Donation image'} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => { 
+                            e.currentTarget.style.display = 'none'; 
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-gray-400 text-sm">No image</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start gap-2">
                         <h2 className="font-medium text-base truncate">
                           {donation.title}
                         </h2>
+                        {/* Optional: Add a status badge here too if needed */}
                       </div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        {donation.location} • {donation.distance}
-                      </div>
-                      <div className="mt-1 text-sm text-[#085f33]">
-                        {donation.pickup_time}
-                      </div>
+                      {/* Conditional Display: Pickup time/location OR Rescued status */}
+                      {donation.status === 'active' ? (
+                        <>
+                          <div className="mt-1 text-sm text-gray-600">
+                            {donation.location} • {donation.distance}
+                          </div>
+                          <div className="mt-1 text-sm text-[#085f33]">
+                            {donation.pickup_time}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-2 text-sm text-green-600 font-medium flex items-center gap-1">
+                           <CheckCircle2 size={16} className="flex-shrink-0"/>
+                           Successfully Rescued
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

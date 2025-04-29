@@ -136,30 +136,25 @@ export const getDonations = async () => {
   });
 };
 
-export const getAvailableDonations = async () => {
+export const getAvailableDonations = async (userId?: string | null) => {
   try {
-    const now = Date.now();
-    if (cachedDonations && (now - lastFetchTime) < APP_CONFIG.CACHE_DURATION) {
-      return { donations: cachedDonations, error: null };
-    }
-
-    const { data, error } = await supabase
+    let query = supabase
       .from('donations')
       .select('*')
-      .eq('status', APP_CONFIG.DONATIONS.STATUS.ACTIVE)
+      // Base filter: EITHER active OR (completed AND rescued by me)
+      .or(`status.eq.${APP_CONFIG.DONATIONS.STATUS.ACTIVE}${userId ? `,and(status.eq.${APP_CONFIG.DONATIONS.STATUS.COMPLETED},rescuer_id.eq.${userId})` : ''}`) 
       .order('created_at', { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) throw error;
     
-    cachedDonations = data;
-    lastFetchTime = now;
-    
     return { donations: data || [], error: null };
   } catch (error) {
-    console.error('Error fetching available donations:', error);
+    console.error('Error fetching available/rescued donations:', error);
     return {
       donations: [],
-      error: error instanceof Error ? error.message : 'Failed to fetch available donations'
+      error: error instanceof Error ? error.message : 'Failed to fetch donations'
     };
   }
 };

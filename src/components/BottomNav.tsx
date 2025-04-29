@@ -1,77 +1,124 @@
-import React from 'react';
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  Home,
+  Search,
+  PlusCircle,
+  MessageCircle,
+  User,
+  Gift,
+  HandHeart
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 export const BottomNav = (): JSX.Element => {
   const location = useLocation();
   const navigate = useNavigate();
-  const currentTab = location.pathname.includes('/receive') || location.pathname.includes('/request') ? 'receive' : 'donate';
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const handleTabChange = (value: string) => {
-    if (value === 'receive') {
-      navigate('/receive');
-    } else {
-      navigate('/');
-    }
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/') return 'dashboard';
+    if (path === '/explore') return 'explore';
+    if (path === '/messages') return 'messages';
+    if (path === '/profile') return 'profile';
+    return '';
+  };
+
+  const handleAddClick = () => {
+    setIsAddModalOpen(true);
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 max-w-md mx-auto">
-      <Tabs value={currentTab} onValueChange={handleTabChange} className="h-full">
-        <TabsList className="h-full w-full grid grid-cols-2 bg-transparent">
-          <TabsTrigger
-            value="donate"
-            className="data-[state=inactive]:text-gray-500 data-[state=active]:text-[#085f33] flex flex-col items-center justify-center gap-1.5"
+    <>
+      <div className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 max-w-md mx-auto px-6">
+        <div className="grid grid-cols-5 h-full">
+          <button
+            onClick={() => navigate('/')}
+            className={`flex flex-col items-center justify-center gap-1 ${
+              getActiveTab() === 'dashboard' ? 'text-[#085f33]' : 'text-gray-500'
+            }`}
           >
-            <svg 
-              width="19" 
-              height="17" 
-              viewBox="0 0 19 17" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path 
-                fillRule="evenodd" 
-                clipRule="evenodd" 
-                d="M13.8873 2.43108C13.5069 2.07523 12.8806 2.10824 12.5464 2.49895L11.3725 3.87158H13.2544C14.0509 3.87158 14.458 2.96498 13.8873 2.43108ZM15.7965 3.87397C16.1221 3.01703 15.9706 1.99874 15.1601 1.24047C14.0233 0.177072 12.1472 0.27047 11.1409 1.44705L11.1409 1.44707L9.5 3.36579L7.85911 1.44707C6.85285 0.270456 4.97675 0.17707 3.83997 1.24046C3.02937 1.99874 2.87788 3.01704 3.20348 3.87397C3.01211 3.87824 2.83667 3.88972 2.67332 3.92011C1.60226 4.1194 0.765 4.90262 0.551958 5.90453C0.499531 6.15108 0.499766 6.42708 0.500039 6.74759C0.500059 6.77089 0.500079 6.79443 0.500079 6.81821C0.500079 6.84199 0.500059 6.86553 0.500039 6.88883C0.499766 7.20934 0.499531 7.48536 0.551958 7.73191C0.668681 8.28086 0.972789 8.76416 1.40007 9.12173L1.40007 12.3459C1.40002 13.0923 1.39999 13.7353 1.474 14.2503C1.55332 14.8021 1.73219 15.3311 2.19087 15.7602C2.64956 16.1893 3.21507 16.3566 3.80503 16.4308C4.35552 16.5001 5.04295 16.5 5.84078 16.5L9.49826 16.5C9.49884 16.5 9.49942 16.5 9.5 16.5C9.50058 16.5 9.50116 16.5 9.50174 16.5L13.1592 16.5C13.957 16.5 14.6445 16.5001 15.1949 16.4308C15.7849 16.3566 16.3504 16.1893 16.8091 15.7602C17.2678 15.3311 17.4467 14.8021 17.526 14.2503C17.6 13.7353 17.6 13.0923 17.5999 12.346L17.5999 9.12176C18.0272 8.76418 18.3314 8.28087 18.4481 7.73189L18.4481 7.73179C18.5005 7.4853 18.5002 7.20935 18.5 6.88881C18.4999 6.86551 18.4999 6.84198 18.4999 6.81821C18.4999 6.79444 18.4999 6.77091 18.5 6.74762C18.5002 6.42708 18.5005 6.15114 18.4481 5.90465L18.4481 5.90454C18.235 4.90261 17.3978 4.1194 16.3267 3.92011C16.1633 3.88972 15.9879 3.87824 15.7965 3.87397ZM15.9757 8.06488C16.3326 7.99842 16.6117 7.73738 16.6827 7.40344C16.6956 7.34253 16.6999 7.24948 16.6999 6.81821C16.6999 6.38696 16.6956 6.29391 16.6827 6.23301M15.9757 8.06488C15.9106 8.07698 15.8113 8.08105 15.3499 8.08105H10.4L10.4 5.55537H15.3499C15.8113 5.55537 15.9105 5.55945 15.9755 5.57155C16.3325 5.63797 16.6116 5.89899 16.6826 6.2329M7.62745 3.87158L6.45356 2.49893C6.11945 2.10826 5.49317 2.07522 5.11275 2.43108C4.54203 2.96496 4.94913 3.87158 5.74562 3.87158H7.62745ZM10.4 9.76484H15.3499C15.3754 9.76484 15.4005 9.76486 15.4254 9.76488C15.557 9.76498 15.6815 9.76507 15.7999 9.76237V12.2905C15.7999 13.1081 15.798 13.6365 15.7421 14.0259C15.6896 14.3911 15.6049 14.5055 15.5363 14.5696C15.4678 14.6337 15.3455 14.713 14.9551 14.7621C14.5389 14.8144 13.9739 14.8162 13.1 14.8162H10.4V9.76484ZM8.60001 8.08105V5.55537H3.65005C3.18873 5.55537 3.0895 5.55945 3.02448 5.57155C2.66746 5.63798 2.38837 5.89905 2.31736 6.23302C2.30442 6.29384 2.30006 6.38666 2.30006 6.81821C2.30006 7.24976 2.30442 7.34259 2.31736 7.40342C2.38836 7.73737 2.6674 7.99842 3.02434 8.06488C3.08945 8.07698 3.18876 8.08105 3.65005 8.08105H8.60001ZM3.20005 9.76237C3.31848 9.76507 3.44302 9.76498 3.57458 9.76488C3.59949 9.76486 3.62464 9.76484 3.65005 9.76484H8.60001V14.8162H5.90003C5.02607 14.8162 4.46113 14.8144 4.04488 14.7621C3.65452 14.713 3.53218 14.6337 3.46367 14.5696C3.39515 14.5055 3.31041 14.3911 3.25793 14.0259C3.20197 13.6365 3.20005 13.1081 3.20005 12.2905V9.76237Z" 
-                fill={currentTab === 'donate' ? '#085f33' : '#999999'}
-              />
-            </svg>
-            <span>Donate</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="receive"
-            className="data-[state=inactive]:text-gray-500 data-[state=active]:text-[#085f33] flex flex-col items-center justify-center gap-1.5"
+            <Home size={20} />
+            <span className="text-xs">Dashboard</span>
+          </button>
+          
+          <button
+            onClick={() => navigate('/explore')}
+            className={`flex flex-col items-center justify-center gap-1 ${
+              getActiveTab() === 'explore' ? 'text-[#085f33]' : 'text-gray-500'
+            }`}
           >
-            <svg 
-              width="21" 
-              height="21" 
-              viewBox="0 0 21 21" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
+            <Search size={20} />
+            <span className="text-xs">Explore</span>
+          </button>
+          
+          <button
+            onClick={handleAddClick}
+            className="flex flex-col items-center justify-center gap-1 text-[#085f33]"
+          >
+            <PlusCircle size={24} />
+            <span className="text-xs">Add</span>
+          </button>
+          
+          <button
+            onClick={() => navigate('/messages')}
+            className={`flex flex-col items-center justify-center gap-1 ${
+              getActiveTab() === 'messages' ? 'text-[#085f33]' : 'text-gray-500'
+            }`}
+          >
+            <MessageCircle size={20} />
+            <span className="text-xs">Messages</span>
+          </button>
+          
+          <button
+            onClick={() => navigate('/profile')}
+            className={`flex flex-col items-center justify-center gap-1 ${
+              getActiveTab() === 'profile' ? 'text-[#085f33]' : 'text-gray-500'
+            }`}
+          >
+            <User size={20} />
+            <span className="text-xs">Profile</span>
+          </button>
+        </div>
+      </div>
+
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>What would you like to do?</DialogTitle>
+            <DialogDescription>Choose an option below</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <button
+              onClick={() => {
+                setIsAddModalOpen(false);
+                navigate('/new-donation');
+              }}
+              className="flex flex-col items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-[#085f33] transition-colors"
             >
-              <g clipPath="url(#clip0_761_1063)">
-                <path 
-                  fillRule="evenodd" 
-                  clipRule="evenodd" 
-                  d="M15.0808 18.7735C15.3705 18.6577 15.6247 18.5411 15.8435 18.4312C16.2778 19.1703 17.0812 19.6665 18.0005 19.6665C19.3812 19.6665 20.5005 18.5472 20.5005 17.1665V12.1665C20.5005 10.7858 19.3812 9.6665 18.0005 9.6665C16.8322 9.6665 15.8511 10.4678 15.5769 11.5508C15.3387 11.6343 15.0985 11.7123 14.8549 11.7818C14.1499 11.9833 13.3007 12.1664 12.5838 12.1664C11.5216 12.1664 9.61879 11.7793 8.51741 11.5302C7.68238 11.3413 6.82469 11.8085 6.54919 12.635L6.21973 13.6234C5.29606 13.279 4.17775 12.72 3.39728 12.306C2.52428 11.8429 1.41462 12.2206 1.03773 13.1628L0.774882 13.8199C0.518034 14.462 0.680154 15.221 1.2428 15.6846C1.88635 16.2149 3.15996 17.198 4.72074 18.0523C6.2664 18.8983 8.18014 19.6664 10.0838 19.6664C12.281 19.6664 13.9483 19.2265 15.0808 18.7735ZM17.1671 17.1665C17.1671 17.6268 17.5402 17.9998 18.0005 17.9998C18.4607 17.9998 18.8338 17.6268 18.8338 17.1665V12.1665C18.8338 11.7063 18.4607 11.3332 18.0005 11.3332C17.5402 11.3332 17.1671 11.7063 17.1671 12.1665V17.1665ZM12.5838 13.8331C11.3017 13.8331 9.21162 13.3959 8.14977 13.1558C8.14977 13.1558 7.87115 13.9397 7.83037 14.0619L11.0392 14.8978C11.4241 14.9981 11.6438 15.4031 11.518 15.7804C11.4117 16.0993 11.0915 16.2945 10.76 16.2386C9.74237 16.0669 7.62742 15.6914 6.54919 15.3636C5.09707 14.922 3.59282 14.2964 2.61624 13.7783C2.61624 13.7783 2.35834 14.3489 2.32967 14.4206C2.9369 14.9191 4.10706 15.8164 5.52096 16.5903C6.97119 17.3841 8.59164 17.9998 10.0838 17.9998C13.0196 17.9998 14.8145 17.1294 15.5005 16.7207V13.3295C14.5572 13.6114 13.5725 13.8331 12.5838 13.8331Z" 
-                  fill={currentTab === 'receive' ? '#085f33' : '#999999'}
-                />
-                <path 
-                  d="M10.4994 1.3335C10.0391 1.3335 9.66602 1.7066 9.66602 2.16683V6.82153L8.58861 5.74415C8.26319 5.41883 7.73554 5.41883 7.41012 5.74415C7.08465 6.06967 7.08465 6.59721 7.41012 6.92274L9.90935 9.42208C10.2346 9.74724 10.7618 9.74749 11.0873 9.42266L13.5869 6.92823C13.9123 6.60291 13.9123 6.07516 13.5869 5.74985C13.2614 5.42432 12.7338 5.42432 12.4084 5.74985L11.3327 6.82545V2.16683C11.3327 1.7066 10.9596 1.3335 10.4994 1.3335Z" 
-                  fill={currentTab === 'receive' ? '#085f33' : '#999999'}
-                />
-              </g>
-              <defs>
-                <clipPath id="clip0_761_1063">
-                  <rect width="20" height="20" fill="white" transform="translate(0.5 0.5)"/>
-                </clipPath>
-              </defs>
-            </svg>
-            <span>Receive</span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-    </div>
+              <Gift size={24} className="text-[#085f33]" />
+              <span className="text-sm font-medium">Donate Food</span>
+            </button>
+            <button
+              onClick={() => {
+                setIsAddModalOpen(false);
+                navigate('/request');
+              }}
+              className="flex flex-col items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-[#085f33] transition-colors"
+            >
+              <HandHeart size={24} className="text-[#085f33]" />
+              <span className="text-sm font-medium">Request Food</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };

@@ -60,6 +60,8 @@ export interface Database {
           status: string
           created_at: string
           updated_at: string
+          rescuer_id?: string | null
+          image_url?: string | null
         }
         Insert: {
           id?: string
@@ -73,6 +75,8 @@ export interface Database {
           status?: string
           created_at?: string
           updated_at?: string
+          rescuer_id?: string | null
+          image_url?: string | null
         }
         Update: {
           id?: string
@@ -86,6 +90,8 @@ export interface Database {
           status?: string
           created_at?: string
           updated_at?: string
+          rescuer_id?: string | null
+          image_url?: string | null
         }
       }
     }

@@ -5,7 +5,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthProvider } from "./components/AuthProvider";
 import { Donate } from "./screens/Donate/Donate";
-import { Receive } from "./screens/Receive/Receive";
+import { Explore } from "./screens/Explore/Explore";
 import { DonationDetails } from "./screens/Receive/DonationDetails";
 import { RescueThankYouPage } from "./screens/Receive/RescueThankYouPage";
 import { NewDonation } from "./screens/NewDonation/NewDonation";
@@ -48,114 +48,62 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-createRoot(document.getElementById("app") as HTMLElement).render(
+const App = () => {
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <Routes>
+      {/* Auth routes */}
+      <Route element={<AuthLayout />}>
+        <Route path="/signin" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/update-password" element={<UpdatePassword />} />
+        <Route path="/email-verification" element={<EmailVerification />} />
+        <Route path="/verification-success" element={<VerificationSuccess />} />
+      </Route>
+
+      {/* Protected routes */}
+      <Route element={<RequireAuth />}>
+        <Route path="/" element={<Donate />} />
+        <Route path="/explore" element={<Explore />} />
+        <Route path="/donations/:id" element={<DonationDetails />} />
+        <Route path="/new-donation" element={<NewDonation />} />
+        <Route path="/new-donation/step2" element={<DonationStep2 />} />
+        <Route path="/new-donation/step3" element={<DonationStep3 />} />
+        <Route path="/new-donation/step4" element={<DonationStep4 />} />
+        <Route path="/new-donation/voice" element={<VoiceInput />} />
+        <Route path="/new-donation/confirmation" element={<DonationConfirmation />} />
+        <Route path="/request" element={<NewRequest />} />
+        <Route path="/request/calendar" element={<RequestCalendar />} />
+        <Route path="/rescue/thank-you" element={<RescueThankYouPage />} />
+        <Route path="/profile" element={<UserProfile />} />
+        <Route path="/messages" element={<div>Messages Coming Soon</div>} />
+      </Route>
+
+      {/* Public routes */}
+      <Route path="/auth" element={<Auth />} />
+      <Route path="/error" element={<ErrorPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
+const container = document.getElementById("root");
+const root = createRoot(container!);
+
+root.render(
   <StrictMode>
     <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <Routes>
-          {/* Public Routes */}
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/signin" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/auth/verify/success" element={<VerificationSuccess />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/auth/verify/pending" element={<EmailVerification />} />
-          <Route path="/auth/verify" element={<EmailVerification />} />
-          <Route path="/update-password" element={<UpdatePassword />} />
-          <Route path="/receive/thank-you" element={
-            <ProtectedRoute>
-              <RescueThankYouPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/receive/:id" element={
-            <ProtectedRoute>
-              <DonationDetails />
-            </ProtectedRoute>
-          } />
-          <Route path="/receive/confirm-rescue/:id" element={
-            <ProtectedRoute>
-              <RescueConfirm />
-            </ProtectedRoute>
-          } />
-          
-          {/* Protected Routes */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Donate />
-            </ProtectedRoute>
-          } />
-          <Route path="/receive" element={
-            <ProtectedRoute>
-              <Receive />
-            </ProtectedRoute>
-          } />
-          <Route path="/request/new" element={
-            <ProtectedRoute>
-              <NewRequest />
-            </ProtectedRoute>
-          } />
-          <Route path="/request/calendar" element={
-            <ProtectedRoute>
-              <RequestCalendar />
-            </ProtectedRoute>
-          } />
-          <Route path="/request/confirm" element={
-            <ProtectedRoute>
-              <RequestConfirm />
-            </ProtectedRoute>
-          } />
-          <Route path="/request/thank-you" element={
-            <ProtectedRoute>
-              <RequestThankYou />
-            </ProtectedRoute>
-          } />
-          <Route path="/new-donation/thank-you" element={
-            <ProtectedRoute>
-              <ThankYouPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/new-donation/step4" element={
-            <ProtectedRoute>
-              <DonationStep4 />
-            </ProtectedRoute>
-          } />
-          <Route path="/new-donation/voice" element={
-            <ProtectedRoute>
-              <VoiceInput />
-            </ProtectedRoute>
-          } />
-          <Route path="/new-donation/step3" element={
-            <ProtectedRoute>
-              <DonationStep3 />
-            </ProtectedRoute>
-          } />
-          <Route path="/new-donation/step2" element={
-            <ProtectedRoute>
-              <DonationStep2 />
-            </ProtectedRoute>
-          } />
-          <Route path="/new-donation" element={
-            <ProtectedRoute>
-              <NewDonation />
-            </ProtectedRoute>
-          } />
-          <Route path="/profile" element={
-            <ProtectedRoute>
-              <UserProfile />
-            </ProtectedRoute>
-          } />
-          <Route path="/donate/confirmation" element={
-            <ProtectedRoute>
-              <DonationConfirmation />
-            </ProtectedRoute>
-          } />
-          
-          {/* Redirect root to auth if not authenticated */}
-          <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Router>
-      </AuthProvider>
+      <Router>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </Router>
     </ErrorBoundary>
   </StrictMode>
 );

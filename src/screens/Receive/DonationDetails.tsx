@@ -72,9 +72,21 @@ export const DonationDetails = (): JSX.Element => {
 
         <div className="space-y-6 mb-8">
           <div className="aspect-square w-full bg-gray-200 rounded-lg overflow-hidden">
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-gray-400">No image</span>
-            </div>
+            {donation.image_url ? (
+              <img 
+                src={donation.image_url}
+                alt={donation.title ?? 'Donation image'} 
+                className="w-full h-full object-cover"
+                onError={(e) => { 
+                  e.currentTarget.style.display = 'none'; 
+                  // Could add a fallback display here if needed
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <span className="text-gray-400">No image</span>
+              </div>
+            )}
           </div>
 
           <Card className="bg-[#fff0f2] border-none">

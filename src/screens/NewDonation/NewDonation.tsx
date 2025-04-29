@@ -1,12 +1,14 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "../../components/ui/button";
-import { Card } from "../../components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../components/ui/card";
+import { Input } from "../../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "../../components/Layout";
 import { Mic, Plus, Minus, X, Pencil, Trash2, MoreVertical, Camera, Upload } from 'lucide-react';
 
 // Item type definition
-type FoodItem = {
+interface FoodItem {
   id: number;
   title: string;
   quantity: string;
@@ -17,148 +19,91 @@ type FoodItem = {
     G: boolean;
   };
   image?: {
-    dataUrl?: string;
+    dataUrl?: string; // Keep dataUrl for preview
     name?: string;
     type?: string;
   } | null;
-};
+  imageFile?: File | null; // Add field for the actual file object
+}
+
+// Default units for quantity
+const defaultUnits = ["Kg", "L", "pcs", "serving"];
 
 export const NewDonation = (): JSX.Element => {
   const navigate = useNavigate();
   const location = useLocation();
-  const savedItems = location.state?.items || [];
   
-  // If we have saved items from step 2, use them, otherwise use default
-  const [items, setItems] = useState<FoodItem[]>(
-    savedItems.length > 0 
-      ? savedItems.map((item: any, index: number) => ({
-          id: index + 1,
+  // Initialize items from location state or with a default item
+  const initialItems = location.state?.items as FoodItem[] | undefined;
+  const [items, setItems] = useState<FoodItem[]>(() => 
+    initialItems && initialItems.length > 0
+      ? initialItems.map((item: any) => ({ // Map initial state to ensure all fields exist
+          id: item.id || Date.now() + Math.random(), // Ensure ID
           title: item.title || '',
-          quantity: item.quantity?.replace(/[^0-9.]/g, '') || '0.5',
-          unit: 'Kg',
-          allergens: {
-            VL: item.allergens?.includes('VL') || false,
-            Veg: item.allergens?.includes('Veg') || false,
-            G: item.allergens?.includes('G') || false
-          },
-          image: item.image || null
+          quantity: item.quantity || '',
+          unit: item.unit || defaultUnits[0],
+          allergens: item.allergens || { VL: false, Veg: false, G: false },
+          image: item.image || null,
+          imageFile: item.imageFile || null // Initialize imageFile here too
         }))
       : [
           {
-            id: 1,
+            id: Date.now(),
             title: '',
-            quantity: '0.5',
-            unit: 'Kg',
+            quantity: '',
+            unit: defaultUnits[0],
             allergens: {
               VL: false,
               Veg: false,
               G: false
             },
-            image: null
+            image: null,
+            imageFile: null // Initialize imageFile
           }
         ]
   );
-  const [error, setError] = useState<string | null>(null);
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [menuOpenItemId, setMenuOpenItemId] = useState<number | null>(null);
-  const [savedItemIds, setSavedItemIds] = useState<number[]>(
-    savedItems.length > 0 
-      ? savedItems.map((_: any, index: number) => index + 1) // Mark all items from step 2 as saved
-      : []
-  );
   
+  const [error, setError] = useState<string | null>(null);
+  const [isEditingItemId, setIsEditingItemId] = useState<number | null>(() => 
+    // Automatically open the first item if it's new
+    items.length === 1 && items[0].title === '' ? items[0].id : null
+  );
+
   // Refs for file inputs
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const cameraInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Ensure refs arrays are correctly sized
-  useEffect(() => {
-    if (fileInputRefs.current.length !== items.length) {
-      fileInputRefs.current = items.map((_, i) => fileInputRefs.current[i] || null);
-    }
-    if (cameraInputRefs.current.length !== items.length) {
-      cameraInputRefs.current = items.map((_, i) => cameraInputRefs.current[i] || null);
-    }
-  }, [items.length]);
-
-  useEffect(() => {
-    // Clear any errors when component mounts
-    setError(null);
-    
-    // Clean up function to clear errors when component unmounts
-    return () => {
-      setError(null);
-    };
-  }, []);
-
-  // Add a handler to close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuOpenItemId !== null) {
-        // If we clicked something that's not part of the menu, close the menu
-        const menuElement = document.getElementById(`menu-${menuOpenItemId}`);
-        if (menuElement && !menuElement.contains(event.target as Node)) {
-          setMenuOpenItemId(null);
-        }
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [menuOpenItemId]);
-
-  const handleChange = (id: number, field: string, value: string) => {
-    setItems(prevItems => 
-      prevItems.map(item => 
-        item.id === id ? { ...item, [field]: value } : item
-      )
-    );
-    setError(null);
+  // Validation function
+  const isItemValid = (item: FoodItem): boolean => {
+    return item.title.trim() !== '' && item.quantity.trim() !== '' && parseFloat(item.quantity) > 0;
   };
 
-  const handleQuantityChange = (id: number, amount: number) => {
+  // Handler for input changes
+  const handleChange = (id: number, field: keyof FoodItem | `allergens.${keyof FoodItem['allergens']}`, value: any) => {
     setItems(prevItems => 
       prevItems.map(item => {
         if (item.id === id) {
-          const currentQuantity = parseFloat(item.quantity) || 0;
-          const newQuantity = Math.max(0, currentQuantity + amount);
-          return { ...item, quantity: newQuantity.toString() };
+          if (field.startsWith('allergens.')) {
+            const allergenKey = field.split('.')[1] as keyof FoodItem['allergens'];
+            return {
+              ...item,
+              allergens: {
+                ...(item.allergens ?? { VL: false, Veg: false, G: false }),
+                [allergenKey]: value as boolean
+              }
+            };
+          } else {
+            return { ...item, [field]: value };
+          }
         }
         return item;
       })
     );
+    setError(null); // Clear error on change
   };
 
-  const toggleAllergen = (id: number, allergen: 'VL' | 'Veg' | 'G') => {
-    setItems(prevItems => 
-      prevItems.map(item => {
-        if (item.id === id) {
-          return {
-            ...item,
-            allergens: {
-              ...item.allergens,
-              [allergen]: !item.allergens[allergen]
-            }
-          };
-        }
-        return item;
-      })
-    );
-  };
-
-  const isItemValid = (item: FoodItem) => {
-    return item.title.trim() !== '' && parseFloat(item.quantity) > 0;
-  };
-
-  const canAddAnotherItem = () => {
-    // Check if all current items have valid title and quantity
-    return items.every(item => isItemValid(item));
-  };
-
+  // Add a new empty item
   const addAnotherItem = () => {
-    // Don't validate current items, just add a new one
     const newItem = {
       id: Math.max(...items.map(item => item.id), 0) + 1,
       title: '',
@@ -169,146 +114,90 @@ export const NewDonation = (): JSX.Element => {
         Veg: false,
         G: false
       },
-      image: null
+      image: null,
+      imageFile: null // Initialize imageFile
     };
-
     setItems(prevItems => [...prevItems, newItem]);
-    setEditingItemId(newItem.id);
+    setIsEditingItemId(newItem.id);
     setError(null);
   };
 
-  const removeItem = (id: number) => {
-    // Don't allow removing the last item
-    if (items.length <= 1) return;
-    
+  // Delete an item
+  const deleteItem = (id: number) => {
     setItems(prevItems => prevItems.filter(item => item.id !== id));
-    
-    // If we're removing the currently edited item, clear the editing state
-    if (editingItemId === id) {
-      setEditingItemId(null);
+    if (isEditingItemId === id) {
+      setIsEditingItemId(null); // Close editor if the deleted item was being edited
+    }
+    // Prevent navigating away if last item is deleted - user must add a new one
+    if (items.length === 1) {
+       addAnotherItem(); // Add a new blank item immediately
+       setItems(prev => prev.filter(item => item.id !== id)); // Remove the deleted one after adding new
     }
   };
+  
+  // Edit an item
+  const editItem = (id: number) => {
+    // Save the currently editing item first if it's different
+    if (isEditingItemId !== null && isEditingItemId !== id) {
+      const currentItem = items.find(i => i.id === isEditingItemId);
+      if (currentItem && !isItemValid(currentItem)) {
+        setError('Please complete the current item before editing another.');
+        return;
+      }
+    }
+    setIsEditingItemId(id);
+    setError(null);
+  };
 
-  const deleteItem = (id: number) => {
-    // Don't allow deleting the last item
-    if (items.length <= 1) {
-      setError('You must have at least one food item');
+  // Save (close editor) an item
+  const saveItem = (id: number) => {
+    const item = items.find(i => i.id === id);
+    if (item && !isItemValid(item)) {
+      setError('Please fill in all required fields (Food item, Quantity) before saving.');
       return;
     }
-    
-    // Clear any previous errors when successfully deleting
+    setIsEditingItemId(null);
     setError(null);
-    
-    // Remove from savedItemIds if it was saved
-    if (savedItemIds.includes(id)) {
-      setSavedItemIds(prev => prev.filter(itemId => itemId !== id));
-    }
-    
-    // Remove the item from the items array
-    setItems(prev => prev.filter(item => item.id !== id));
-    
-    // If we're deleting the currently edited item, clear the editing state
-    if (editingItemId === id) {
-      setEditingItemId(null);
-    }
   };
 
-  const getSelectedAllergens = (item: FoodItem) => {
-    return Object.entries(item.allergens)
+  // Get selected allergens as string array
+  const getSelectedAllergens = (item: FoodItem): string[] => {
+    return Object.entries(item.allergens ?? {})
       .filter(([_, value]) => value)
       .map(([key]) => key);
   };
 
-  const getAllergenText = (item: FoodItem) => {
-    const selectedAllergens = getSelectedAllergens(item);
-    return selectedAllergens.length > 0 ? selectedAllergens.join(', ') : '';
-  };
-
-  const saveItem = (id: number, shouldExitEditMode: boolean = false) => {
-    console.log('Save item called with id:', id);
-    
-    const item = items.find(item => item.id === id);
-    if (!item) {
-      setError('Item not found');
-      return;
-    }
-    
-    if (!isItemValid(item)) {
-      setError('Please fill in all required fields');
-      return;
-    }
-    
-    // Add this item to the saved items list if not already there
-    if (!savedItemIds.includes(id)) {
-      setSavedItemIds(prev => [...prev, id]);
-    }
-    
-    // Only exit edit mode if requested
-    if (shouldExitEditMode) {
-      setEditingItemId(() => null);
-    }
-    
-    setError(null);
-    
-    // Force browser to redraw
-    window.requestAnimationFrame(() => {
-      const savedItem = document.getElementById(`item-${id}`);
-      if (savedItem) {
-        savedItem.classList.add('opacity-70');
-        setTimeout(() => {
-          savedItem.classList.remove('opacity-70');
-        }, 300);
-      }
-    });
-  };
-
-  const editItem = (id: number) => {
-    setEditingItemId(id);
-    setError(null);
-  };
-
-  const toggleMenu = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setMenuOpenItemId(menuOpenItemId === id ? null : id);
-  };
-
+  // Modify handleContinue to pass items with imageFile
   const handleContinue = () => {
-    // Add debug logging
-    console.log('Saved item IDs:', savedItemIds);
-    console.log('Valid items:', items.filter(item => isItemValid(item)).map(item => item.id));
-    
-    // Check if we have at least one saved valid item
+    // Use existing validation
     const hasSavedValidItems = items.some(item => 
       isItemValid(item) && savedItemIds.includes(item.id)
     );
-    console.log('Has saved valid items:', hasSavedValidItems);
-    
     if (!hasSavedValidItems) {
       setError('Please complete and save at least one food item');
       return;
     }
     
-    // Format items for the next step - only include valid items
+    // Format items for the next step, ensuring imageFile is included
     const formattedItems = items
       .filter(item => isItemValid(item) && savedItemIds.includes(item.id))
       .map(item => ({
         title: item.title,
         quantity: `${item.quantity} ${item.unit}`,
         allergens: getSelectedAllergens(item),
-        image: item.image
+        image: item.image, // Keep preview data if needed by next steps
+        imageFile: item.imageFile // *** Pass the file object ***
       }));
     
-    console.log('Navigating with items:', formattedItems);
-    
-    // Fix the navigation path - use /new-donation/step2 instead of /donation/step2
-    navigate('/new-donation/step2', {
+    setError(null);
+    navigate('/new-donation/step2', { 
       state: { 
-        items: formattedItems
+        items: formattedItems 
       }
     });
   };
 
-  // Add handlers for camera and file uploads
+  // Modify handleFileChange to store File object
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, itemId: number) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -316,10 +205,10 @@ export const NewDonation = (): JSX.Element => {
     const file = files[0];
     if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
       alert('Please upload images under 5MB in jpg, png, or gif format');
+      e.target.value = ''; 
       return;
     }
 
-    // Use FileReader to create a base64 data URL
     const reader = new FileReader();
     reader.onload = (event) => {
       const target = event.target;
@@ -329,11 +218,12 @@ export const NewDonation = (): JSX.Element => {
             item.id === itemId 
               ? { 
                   ...item, 
-                  image: {
+                  image: { // Set preview data
                     dataUrl: target.result as string,
                     name: file.name,
                     type: file.type
-                  }
+                  },
+                  imageFile: file // Store the actual file object
                 } 
               : item
           )
@@ -345,16 +235,19 @@ export const NewDonation = (): JSX.Element => {
       alert('Failed to load image. Please try another image.');
     };
     reader.readAsDataURL(file);
+    e.target.value = ''; 
   };
 
+  // Modify removeImage to clear File object
   const removeImage = (itemId: number) => {
     setItems(prev => 
       prev.map(item => 
-        item.id === itemId ? { ...item, image: null } : item
+        item.id === itemId ? { ...item, image: null, imageFile: null } : item // Clear both preview and file
       )
     );
   };
 
+  // Trigger hidden file input
   const handleCameraClick = (itemId: number) => {
     const index = items.findIndex(item => item.id === itemId);
     if (index !== -1 && cameraInputRefs.current[index]) {
@@ -368,6 +261,12 @@ export const NewDonation = (): JSX.Element => {
       fileInputRefs.current[index]?.click();
     }
   };
+
+  // Effect to resize refs array when items change
+  useEffect(() => {
+    fileInputRefs.current = fileInputRefs.current.slice(0, items.length);
+    cameraInputRefs.current = cameraInputRefs.current.slice(0, items.length);
+  }, [items.length]);
 
   return (
     <Layout>
@@ -397,8 +296,8 @@ export const NewDonation = (): JSX.Element => {
 
           {items.map((item, index) => {
             // Only auto-open first item if it hasn't been saved yet
-            const isEditing = editingItemId === item.id || 
-                             (index === 0 && items.length === 1 && editingItemId === null && !savedItemIds.includes(item.id));
+            const isEditing = isEditingItemId === item.id || 
+                             (index === 0 && items.length === 1 && isEditingItemId === null && !items.some(i => i.saved));
             
             return (
               <Card key={item.id} id={`item-${item.id}`} className="bg-[#fff0f2] border-none mb-4">
@@ -410,7 +309,7 @@ export const NewDonation = (): JSX.Element => {
                         <h3 className="font-medium">Item {index + 1}</h3>
                       </div>
                       <button 
-                        onClick={() => setEditingItemId(null)}
+                        onClick={() => setIsEditingItemId(null)}
                         className="text-gray-500 hover:text-red-500"
                         aria-label="Close form"
                       >
@@ -479,7 +378,7 @@ export const NewDonation = (): JSX.Element => {
                         <div className="flex items-center gap-2">
                           <button 
                             type="button"
-                            onClick={() => handleQuantityChange(item.id, -0.1)}
+                            onClick={() => handleChange(item.id, 'quantity', (parseFloat(item.quantity) - 0.1).toString())}
                             className="p-2 rounded-lg border border-gray-300 bg-white"
                           >
                             <Minus size={16} />
@@ -497,7 +396,7 @@ export const NewDonation = (): JSX.Element => {
                           />
                           <button 
                             type="button"
-                            onClick={() => handleQuantityChange(item.id, 0.1)}
+                            onClick={() => handleChange(item.id, 'quantity', (parseFloat(item.quantity) + 0.1).toString())}
                             className="p-2 rounded-lg border border-gray-300 bg-white"
                           >
                             <Plus size={16} />
@@ -512,8 +411,8 @@ export const NewDonation = (): JSX.Element => {
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => toggleAllergen(item.id, 'VL')}
-                            className={`px-4 py-2 rounded-lg ${item.allergens.VL 
+                            onClick={() => handleChange(item.id, 'allergens.VL', !item.allergens?.VL)}
+                            className={`px-4 py-2 rounded-lg ${item.allergens?.VL 
                               ? 'bg-[#085f33] text-white' 
                               : 'bg-white border border-gray-300 text-gray-700'}`}
                           >
@@ -521,8 +420,8 @@ export const NewDonation = (): JSX.Element => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => toggleAllergen(item.id, 'Veg')}
-                            className={`px-4 py-2 rounded-lg ${item.allergens.Veg 
+                            onClick={() => handleChange(item.id, 'allergens.Veg', !item.allergens?.Veg)}
+                            className={`px-4 py-2 rounded-lg ${item.allergens?.Veg 
                               ? 'bg-[#085f33] text-white' 
                               : 'bg-white border border-gray-300 text-gray-700'}`}
                           >
@@ -530,8 +429,8 @@ export const NewDonation = (): JSX.Element => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => toggleAllergen(item.id, 'G')}
-                            className={`px-4 py-2 rounded-lg ${item.allergens.G 
+                            onClick={() => handleChange(item.id, 'allergens.G', !item.allergens?.G)}
+                            className={`px-4 py-2 rounded-lg ${item.allergens?.G 
                               ? 'bg-[#085f33] text-white' 
                               : 'bg-white border border-gray-300 text-gray-700'}`}
                           >
@@ -542,7 +441,7 @@ export const NewDonation = (): JSX.Element => {
 
                       <div className="flex justify-end pt-4">
                         <Button
-                          onClick={() => saveItem(item.id, true)}
+                          onClick={() => saveItem(item.id)}
                           className="bg-[#085f33] text-white rounded-full px-8 py-2 hover:bg-[#064726] transition-colors"
                           disabled={!isItemValid(item)}
                         >
@@ -594,7 +493,7 @@ export const NewDonation = (): JSX.Element => {
                       <div>
                         <h3 className="font-medium">{item.title}</h3>
                         <p className="text-gray-600">{item.quantity} {item.unit}</p>
-                        <p className="text-gray-600">{getAllergenText(item)}</p>
+                        <p className="text-gray-600">{getSelectedAllergens(item).join(', ')}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -607,29 +506,15 @@ export const NewDonation = (): JSX.Element => {
                       </button>
                       <div className="relative">
                         <button
-                          onClick={(e) => toggleMenu(item.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteItem(item.id);
+                          }}
                           className="p-1 text-gray-500 hover:text-gray-700"
                           aria-label="More options"
                         >
-                          <MoreVertical size={18} />
+                          <Trash2 size={18} />
                         </button>
-                        {menuOpenItemId === item.id && (
-                          <div 
-                            id={`menu-${item.id}`}
-                            className="absolute right-0 top-full mt-1 bg-white shadow-lg rounded-md overflow-hidden z-10 w-32 border border-gray-200"
-                          >
-                            <button
-                              onClick={() => {
-                                deleteItem(item.id);
-                                setMenuOpenItemId(null);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <Trash2 size={14} />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -638,7 +523,7 @@ export const NewDonation = (): JSX.Element => {
             );
           })}
 
-          {canAddAnotherItem() && (
+          {items.length < 4 && (
             <button
               type="button"
               onClick={addAnotherItem}
@@ -655,7 +540,7 @@ export const NewDonation = (): JSX.Element => {
           <Button 
             onClick={handleContinue}
             className="px-12 h-12 rounded-full text-lg transition-colors bg-[#085f33] hover:bg-[#064726] text-white"
-            disabled={!items.some(item => isItemValid(item) && savedItemIds.includes(item.id))}
+            disabled={!items.some(item => isItemValid(item))}
           >
             Review and Continue
           </Button>
