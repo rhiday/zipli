@@ -49,62 +49,31 @@ export const Login = (): JSX.Element => {
 
       // Store keepLoggedIn preference
       if (!keepLoggedIn) {
-        // When not keeping logged in, we'll handle this with a shorter session
-        // Session length is configured at the Supabase project level
         localStorage.setItem('session-preference', 'short-term');
       } else {
         localStorage.setItem('session-preference', 'long-term');
       }
 
-      // Check if user has metadata from registration
-      const metadata = data.session.user.user_metadata;
-      if (!metadata?.name || !metadata?.contact_person || !metadata?.role) {
-        throw new Error('Missing registration data. Please register again.');
-      }
-
       // Fetch organization details
       const { data: organization, error: orgError } = await supabase
         .from('organizations')
-        .select('role')
+        .select('*')
         .eq('id', data.session.user.id)
-        .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
+        .maybeSingle();
 
-      // Only throw error if there was an actual database error
+      // Log for debugging
+      console.log('User ID:', data.session.user.id);
+      console.log('Organization query result:', organization);
+      console.log('Organization error:', orgError);
+
       if (orgError) {
         console.error('Error fetching organization:', orgError);
         throw new Error('Unable to fetch organization details. Please try again.');
       }
 
-      // If no organization found, redirect to registration completion
       if (!organization) {
-        // Create organization profile from metadata
-        const { error: createError } = await supabase
-          .from('organizations')
-          .insert({
-            id: data.session.user.id,
-            name: metadata.name,
-            contact_person: metadata.contact_person,
-            email: data.session.user.email,
-            role: metadata.role,
-            contact_number: metadata.contact_number || '',
-            address: metadata.address || '',
-            created_by: data.session.user.id
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Error creating organization:', createError);
-          throw new Error('Failed to create organization profile');
-        }
-
-        // Use metadata role for redirection
-        if (metadata.role === 'receiver') {
-          navigate('/receive');
-        } else {
-          navigate('/');
-        }
-        return;
+        console.error('No organization found for user');
+        throw new Error('No organization found. Please contact support.');
       }
 
       // Redirect based on role
